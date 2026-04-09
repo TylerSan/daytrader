@@ -53,6 +53,55 @@ class MarkdownRenderer:
                 sections.append(f"| {sym} | {name} | {change_str} |")
             sections.append("")
 
+        # Overnight session data (from futures collector)
+        futures_with_overnight = results.get("futures")
+        if futures_with_overnight and futures_with_overnight.success:
+            has_overnight = any(
+                "overnight_high" in d
+                for d in futures_with_overnight.data.values()
+                if isinstance(d, dict)
+            )
+            if has_overnight:
+                sections.append("## Overnight Session\n")
+                sections.append("| Symbol | Overnight H | Overnight L | Range | Asia H | Asia L | Europe H | Europe L |")
+                sections.append("|--------|------------|------------|-------|--------|--------|----------|----------|")
+                for sym, data in futures_with_overnight.data.items():
+                    if not isinstance(data, dict) or "overnight_high" not in data:
+                        continue
+                    oh = data.get("overnight_high", "—")
+                    ol = data.get("overnight_low", "—")
+                    rng = data.get("overnight_range", "—")
+                    ah = data.get("asia_high", "—")
+                    al = data.get("asia_low", "—")
+                    eh = data.get("europe_high", "—")
+                    el = data.get("europe_low", "—")
+                    sections.append(f"| {sym} | {oh} | {ol} | {rng} | {ah} | {al} | {eh} | {el} |")
+                sections.append("")
+
+        # News headlines
+        news = results.get("news")
+        if news and news.success and news.data.get("headlines"):
+            sections.append("## News Headlines\n")
+            for item in news.data["headlines"]:
+                title = item.get("title", "")
+                publisher = item.get("publisher", "")
+                symbol = item.get("symbol", "")
+                sections.append(f"- **{title}** ({publisher}) [{symbol}]")
+            sections.append("")
+
+        # Pre-market movers
+        movers = results.get("movers")
+        if movers and movers.success and movers.data.get("movers"):
+            sections.append("## Pre-Market Movers\n")
+            sections.append("| Symbol | Name | Price | Gap % | Vol Ratio |")
+            sections.append("|--------|------|-------|-------|-----------|")
+            for m in movers.data["movers"]:
+                gap_str = f"{m['gap_pct']:+.2f}%"
+                sections.append(
+                    f"| {m['symbol']} | {m['name']} | {m['price']} | {gap_str} | {m['vol_ratio']}x |"
+                )
+            sections.append("")
+
         levels = results.get("levels")
         if levels and levels.success:
             sections.append("## Key Levels\n")

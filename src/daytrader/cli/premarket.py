@@ -12,6 +12,8 @@ from daytrader.premarket.collectors.base import MarketDataCollector
 from daytrader.premarket.collectors.futures import FuturesCollector
 from daytrader.premarket.collectors.sectors import SectorCollector
 from daytrader.premarket.collectors.levels import LevelsCollector
+from daytrader.premarket.collectors.news import NewsCollector
+from daytrader.premarket.collectors.movers import MoversCollector
 from daytrader.premarket.renderers.markdown import MarkdownRenderer
 from daytrader.premarket.renderers.pinescript import PineScriptRenderer
 
@@ -21,6 +23,8 @@ def _build_checklist(output_dir: str = "data/exports") -> PremarketChecklist:
     collector.register(FuturesCollector())
     collector.register(SectorCollector())
     collector.register(LevelsCollector())
+    collector.register(NewsCollector())
+    collector.register(MoversCollector())
     renderers = [MarkdownRenderer(output_dir=output_dir)]
     return PremarketChecklist(collector=collector, renderers=renderers)
 
