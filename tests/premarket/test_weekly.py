@@ -44,10 +44,11 @@ async def test_weekly_plan_generates_report(tmp_dir, mock_results):
     mock_mdc.collect_all.return_value = mock_results
 
     generator = WeeklyPlanGenerator(collector=mock_mdc, output_dir=str(tmp_dir))
-    report = await generator.generate(week_start=date(2026, 4, 6))
-    assert "# Weekly Trading Plan" in report
-    assert "2026-04-06" in report
-    assert "ES=F" in report
+    data_report, ai_prompt = await generator.generate(week_start=date(2026, 4, 6))
+    assert "周度交易计划" in data_report
+    assert "2026-04-06" in data_report
+    assert "ES=F" in data_report
+    assert "周度交易计划" in ai_prompt or "本周" in ai_prompt
 
 
 @pytest.mark.asyncio

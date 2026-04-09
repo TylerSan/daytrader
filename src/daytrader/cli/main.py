@@ -44,10 +44,11 @@ pre.add_command(pre_run)
 pre.add_command(pre_pine)
 pre.add_command(pre_analyze)
 
-from daytrader.cli.weekly_cmd import weekly_run, weekly_save
+from daytrader.cli.weekly_cmd import weekly_run, weekly_save, weekly_analyze
 
 weekly.add_command(weekly_run)
 weekly.add_command(weekly_save)
+weekly.add_command(weekly_analyze)
 
 
 @cli.group()

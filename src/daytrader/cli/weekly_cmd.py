@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import click
 
@@ -24,10 +25,25 @@ def _build_weekly_generator(output_dir: str = "data/exports") -> WeeklyPlanGener
 @click.command("run")
 @click.option("--push", is_flag=True, help="Push plan to notification channels")
 def weekly_run(push: bool) -> None:
-    """Generate full weekly trading plan."""
+    """Generate weekly trading plan (data overview)."""
     generator = _build_weekly_generator()
-    report = asyncio.run(generator.generate())
-    click.echo(report)
+    data_report, _ = asyncio.run(generator.generate())
+    click.echo(data_report)
+
+
+@click.command("analyze")
+def weekly_analyze() -> None:
+    """Generate data + save AI analysis prompt for weekly plan."""
+    generator = _build_weekly_generator()
+    data_report, ai_prompt = asyncio.run(generator.generate())
+
+    prompt_path = Path("data/exports/weekly-ai-prompt.md")
+    prompt_path.parent.mkdir(parents=True, exist_ok=True)
+    prompt_path.write_text(ai_prompt)
+
+    click.echo(data_report)
+    click.echo(f"\nAI weekly prompt saved to: {prompt_path}")
+    click.echo('发送 "执行周计划AI分析" 获取完整智能周度计划。')
 
 
 @click.command("save")
