@@ -11,7 +11,7 @@ from daytrader.premarket.collectors.base import Collector, CollectorResult
 
 
 class FuturesCollector(Collector):
-    DEFAULT_SYMBOLS = ["ES=F", "NQ=F", "YM=F", "^VIX"]
+    DEFAULT_SYMBOLS = ["ES=F", "NQ=F", "YM=F", "GC=F", "^VIX"]
 
     def __init__(self, symbols: list[str] | None = None) -> None:
         self._symbols = symbols or self.DEFAULT_SYMBOLS
