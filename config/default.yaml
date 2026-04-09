@@ -1,0 +1,23 @@
+# config/default.yaml
+database:
+  path: data/db/daytrader.db
+
+notifications:
+  enabled: false
+  channels:
+    telegram:
+      enabled: false
+      bot_token: ""
+      chat_id: ""
+    discord:
+      enabled: false
+      webhook_url: ""
+    imessage:
+      enabled: false
+      recipient: ""
+
+premarket:
+  push_on_complete: false
+
+backtest:
+  default_config: stacked_imbalance.yaml
