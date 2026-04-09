@@ -16,6 +16,12 @@ notifications:
       enabled: false
       recipient: ""
 
+obsidian:
+  enabled: true
+  vault_path: ~/Documents/DayTrader Vault
+  daily_folder: Daily
+  weekly_folder: Weekly
+
 premarket:
   push_on_complete: false
 

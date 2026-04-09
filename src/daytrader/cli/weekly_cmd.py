@@ -14,12 +14,31 @@ from daytrader.premarket.collectors.levels import LevelsCollector
 from daytrader.premarket.weekly import WeeklyPlanGenerator
 
 
+def _get_obsidian_weekly_path() -> Path | None:
+    from daytrader.core.config import load_config
+    try:
+        cfg = load_config(
+            default_config=Path(__file__).resolve().parents[3] / "config" / "default.yaml",
+            user_config=Path(__file__).resolve().parents[3] / "config" / "user.yaml",
+        )
+        if cfg.obsidian.enabled:
+            vault = Path(cfg.obsidian.vault_path).expanduser()
+            return vault / cfg.obsidian.weekly_folder
+    except Exception:
+        pass
+    return None
+
+
 def _build_weekly_generator(output_dir: str = "data/exports") -> WeeklyPlanGenerator:
     collector = MarketDataCollector()
     collector.register(FuturesCollector())
     collector.register(SectorCollector())
     collector.register(LevelsCollector())
-    return WeeklyPlanGenerator(collector=collector, output_dir=output_dir)
+    return WeeklyPlanGenerator(
+        collector=collector,
+        output_dir=output_dir,
+        obsidian_weekly_path=_get_obsidian_weekly_path(),
+    )
 
 
 @click.command("run")

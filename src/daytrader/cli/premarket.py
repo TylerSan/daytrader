@@ -18,6 +18,22 @@ from daytrader.premarket.renderers.markdown import MarkdownRenderer
 from daytrader.premarket.renderers.pinescript import PineScriptRenderer
 
 
+def _get_obsidian_daily_path() -> Path | None:
+    """Resolve Obsidian vault daily folder from config."""
+    from daytrader.core.config import load_config
+    try:
+        cfg = load_config(
+            default_config=Path(__file__).resolve().parents[3] / "config" / "default.yaml",
+            user_config=Path(__file__).resolve().parents[3] / "config" / "user.yaml",
+        )
+        if cfg.obsidian.enabled:
+            vault = Path(cfg.obsidian.vault_path).expanduser()
+            return vault / cfg.obsidian.daily_folder
+    except Exception:
+        pass
+    return None
+
+
 def _build_checklist(output_dir: str = "data/exports") -> PremarketChecklist:
     collector = MarketDataCollector()
     collector.register(FuturesCollector())
@@ -26,7 +42,11 @@ def _build_checklist(output_dir: str = "data/exports") -> PremarketChecklist:
     collector.register(NewsCollector())
     collector.register(MoversCollector())
     renderers = [MarkdownRenderer(output_dir=output_dir)]
-    return PremarketChecklist(collector=collector, renderers=renderers)
+    return PremarketChecklist(
+        collector=collector,
+        renderers=renderers,
+        obsidian_daily_path=_get_obsidian_daily_path(),
+    )
 
 
 @click.command("run")

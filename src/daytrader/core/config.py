@@ -40,6 +40,13 @@ class NotificationsConfig(BaseModel):
     channels: NotificationChannels = NotificationChannels()
 
 
+class ObsidianConfig(BaseModel):
+    enabled: bool = True
+    vault_path: str = "~/Documents/DayTrader Vault"
+    daily_folder: str = "Daily"
+    weekly_folder: str = "Weekly"
+
+
 class PremarketConfig(BaseModel):
     push_on_complete: bool = False
 
@@ -51,6 +58,7 @@ class BacktestConfig(BaseModel):
 class DayTraderConfig(BaseModel):
     database: DatabaseConfig = DatabaseConfig()
     notifications: NotificationsConfig = NotificationsConfig()
+    obsidian: ObsidianConfig = ObsidianConfig()
     premarket: PremarketConfig = PremarketConfig()
     backtest: BacktestConfig = BacktestConfig()
 

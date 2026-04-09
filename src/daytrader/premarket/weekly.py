@@ -99,9 +99,15 @@ _WEEKLY_AI_PROMPT = """\
 
 
 class WeeklyPlanGenerator:
-    def __init__(self, collector: MarketDataCollector, output_dir: str = "data/exports") -> None:
+    def __init__(
+        self,
+        collector: MarketDataCollector,
+        output_dir: str = "data/exports",
+        obsidian_weekly_path: Path | None = None,
+    ) -> None:
         self._collector = collector
         self._output_dir = Path(output_dir)
+        self._obsidian_path = obsidian_weekly_path
 
     async def generate(self, week_start: date | None = None) -> tuple[str, str]:
         """Generate data report and AI prompt. Returns (data_report, ai_prompt)."""
@@ -116,9 +122,17 @@ class WeeklyPlanGenerator:
     async def generate_and_save(self, week_start: date | None = None) -> Path:
         week_start = week_start or date.today()
         data_report, _ = await self.generate(week_start)
+
         self._output_dir.mkdir(parents=True, exist_ok=True)
         path = self._output_dir / f"weekly-{week_start.isoformat()}.md"
         path.write_text(data_report)
+
+        # Auto-sync to Obsidian vault
+        if self._obsidian_path:
+            self._obsidian_path.mkdir(parents=True, exist_ok=True)
+            obs_file = self._obsidian_path / f"weekly-{week_start.isoformat()}.md"
+            obs_file.write_text(data_report)
+
         return path
 
     def _render_data(self, results: dict[str, CollectorResult], week_start: date) -> str:

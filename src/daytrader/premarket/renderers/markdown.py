@@ -164,9 +164,19 @@ class MarkdownRenderer:
         results: dict[str, CollectorResult],
         date: date,
         ai_analysis: str = "",
+        obsidian_path: Path | None = None,
     ) -> Path:
         content = self.render(results, date, ai_analysis=ai_analysis)
+
+        # Save to default output dir
         self._output_dir.mkdir(parents=True, exist_ok=True)
         path = self._output_dir / f"premarket-{date.isoformat()}.md"
         path.write_text(content)
+
+        # Auto-sync to Obsidian vault
+        if obsidian_path:
+            obsidian_path.mkdir(parents=True, exist_ok=True)
+            obs_file = obsidian_path / f"premarket-{date.isoformat()}.md"
+            obs_file.write_text(content)
+
         return path
