@@ -38,6 +38,17 @@ def weekly() -> None:
     """Weekly trading plan."""
 
 
+from daytrader.cli.premarket import pre_run, pre_pine
+
+pre.add_command(pre_run)
+pre.add_command(pre_pine)
+
+from daytrader.cli.weekly_cmd import weekly_run, weekly_save
+
+weekly.add_command(weekly_run)
+weekly.add_command(weekly_save)
+
+
 @cli.group()
 def bt() -> None:
     """Strategy backtesting."""
