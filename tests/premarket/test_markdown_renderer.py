@@ -50,6 +50,7 @@ def test_markdown_renderer_produces_report(sample_results):
     report = renderer.render(sample_results, date=datetime(2026, 4, 9).date())
     assert "盘前分析报告" in report
     assert "2026-04-09" in report
+    assert "type: premarket" in report  # YAML frontmatter
     assert "ES=F" in report
     assert "5425.5" in report
     assert "VIX" in report or "^VIX" in report

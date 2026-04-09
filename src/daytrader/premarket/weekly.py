@@ -122,9 +122,16 @@ class WeeklyPlanGenerator:
         return path
 
     def _render_data(self, results: dict[str, CollectorResult], week_start: date) -> str:
+        now = datetime.now()
         sections = [
+            "---",
+            f"date: {week_start.isoformat()}",
+            f"generated: {now.strftime('%Y-%m-%dT%H:%M:%S')}",
+            "type: weekly",
+            "tags: [trading, weekly, plan]",
+            "---\n",
             f"# 周度交易计划 — {week_start.isoformat()} 起\n",
-            f"*生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')} UTC*\n",
+            f"*生成时间: {now.strftime('%Y-%m-%d %H:%M')} UTC*\n",
         ]
 
         sections.append("---")

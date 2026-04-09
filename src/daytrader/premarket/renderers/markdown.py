@@ -19,9 +19,18 @@ class MarkdownRenderer:
         ai_analysis: str = "",
     ) -> str:
         sections: list[str] = []
+        now = datetime.now()
+
+        # Obsidian-compatible YAML frontmatter
+        sections.append("---")
+        sections.append(f"date: {date.isoformat()}")
+        sections.append(f"generated: {now.strftime('%Y-%m-%dT%H:%M:%S')}")
+        sections.append("type: premarket")
+        sections.append("tags: [trading, premarket, daily]")
+        sections.append("---\n")
 
         sections.append(f"# 盘前分析报告 — {date.isoformat()}")
-        sections.append(f"*生成时间: {datetime.now().strftime('%H:%M:%S')} UTC*\n")
+        sections.append(f"*生成时间: {now.strftime('%H:%M:%S')} UTC*\n")
 
         # ═══════════════════════════════════════
         # Section 1: 宏观环境
