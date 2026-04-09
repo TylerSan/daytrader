@@ -1,14 +1,14 @@
-=== DayTrader Pre-Market Report ===
-Started at: Thu  9 Apr 2026 12:39:02 PDT
+[12:47:36] === DayTrader Pre-Market Report ===
+[12:47:36] Step 1: Collecting market data...
 ---
 date: 2026-04-09
-generated: 2026-04-09T12:39:08
+generated: 2026-04-09T12:47:44
 type: premarket
 tags: [trading, premarket, daily]
 ---
 
 # 盘前分析报告 — 2026-04-09
-*生成时间: 12:39:08 UTC*
+*生成时间: 12:47:44 UTC*
 
 ---
 ## 一、宏观环境
@@ -17,11 +17,11 @@ tags: [trading, premarket, daily]
 
 | 品种 | 现价 | 涨跌幅 | 前收 | 日高 | 日低 |
 |------|------|--------|------|------|------|
-| ES=F | 6864.0 | +0.59% | 6823.75 | 6876.0 | 6792.5 |
-| NQ=F | 25224.25 | +0.60% | 25074.25 | 25265.75 | 24953.0 |
-| YM=F | 48460.0 | +0.66% | 48144.0 | 48555.0 | 47902.0 |
-| GC=F | 4798.5 | +0.45% | 4777.2 | 4826.0 | 4718.6 |
-| ^VIX | 19.78 | -5.99% | 25.78 | 21.63 | 19.64 |
+| ES=F | 6868.0 | +0.65% | 6823.75 | 6876.0 | 6792.5 |
+| NQ=F | 25247.75 | +0.69% | 25074.25 | 25265.75 | 24953.0 |
+| YM=F | 48469.0 | +0.68% | 48144.0 | 48555.0 | 47902.0 |
+| GC=F | 4796.4 | +0.40% | 4777.2 | 4826.0 | 4718.6 |
+| ^VIX | 19.61 | -6.80% | 25.78 | 21.63 | 19.61 |
 
 ### 1.2 隔夜走势（Globex）
 
@@ -31,23 +31,23 @@ tags: [trading, premarket, daily]
 | NQ=F | 25265.75 | 24953.0 | 312.75 | 25047.0 | 24994.25 | 25059.0 | 24953.0 |
 | YM=F | 48555.0 | 47902.0 | 653.0 | 48105.0 | 48035.0 | 48105.0 | 47902.0 |
 | GC=F | 4826.0 | 4727.2 | 98.8 | 4749.6 | 4729.1 | 4782.7 | 4727.2 |
-| ^VIX | 21.63 | 19.64 | 1.99 | — | — | 21.63 | 21.12 |
+| ^VIX | 21.63 | 19.61 | 2.02 | — | — | 21.63 | 21.12 |
 
 ### 1.3 板块强弱
 
 | ETF | 板块 | 涨跌幅 |
 |-----|------|--------|
-| XLY | Consumer Discretionary | +1.83% |
-| XLI | Industrials | +1.18% |
-| XLU | Utilities | +1.05% |
-| XLP | Consumer Staples | +0.92% |
-| XLRE | Real Estate | +0.90% |
-| XLC | Communication | +0.50% |
-| XLF | Financials | +0.39% |
-| XLK | Technology | +0.16% |
-| XLB | Materials | +0.11% |
-| XLV | Healthcare | -0.12% |
-| XLE | Energy | -1.08% |
+| XLY | Consumer Discretionary | +1.80% |
+| XLI | Industrials | +1.14% |
+| XLU | Utilities | +0.97% |
+| XLP | Consumer Staples | +0.86% |
+| XLRE | Real Estate | +0.84% |
+| XLC | Communication | +0.48% |
+| XLF | Financials | +0.42% |
+| XLK | Technology | +0.23% |
+| XLB | Materials | -0.02% |
+| XLV | Healthcare | -0.14% |
+| XLE | Energy | -1.31% |
 
 ---
 ## 二、消息面
@@ -98,14 +98,15 @@ tags: [trading, premarket, daily]
 
 | 代码 | 名称 | 现价 | 缺口 | 量比 |
 |------|------|------|------|------|
-| PLTR | Palantir Technologies Inc. | 128.79 | -8.50% | 2.09x |
-| AMZN | Amazon.com, Inc. | 232.88 | +5.26% | 1.19x |
-| COIN | Coinbase Global, Inc. | 168.79 | -3.60% | 0.89x |
-| NFLX | Netflix, Inc. | 102.28 | +2.90% | 0.69x |
-| META | Meta Platforms, Inc. | 629.94 | +2.86% | 0.7x |
-| MARA | MARA Holdings, Inc. | 9.71 | +2.21% | 0.87x |
-| AMD | Advanced Micro Devices, Inc. | 236.88 | +2.18% | 0.59x |
-| BAC | Bank of America Corporation | 52.78 | +1.74% | 0.53x |
+| PLTR | Palantir Technologies Inc. | 129.55 | -7.96% | 2.14x |
+| AMZN | Amazon.com, Inc. | 233.09 | +5.35% | 1.23x |
+| COIN | Coinbase Global, Inc. | 168.82 | -3.58% | 0.92x |
+| NFLX | Netflix, Inc. | 102.22 | +2.85% | 0.71x |
+| META | Meta Platforms, Inc. | 628.93 | +2.70% | 0.72x |
+| AMD | Advanced Micro Devices, Inc. | 236.69 | +2.10% | 0.6x |
+| BAC | Bank of America Corporation | 52.8 | +1.78% | 0.55x |
+| MARA | MARA Holdings, Inc. | 9.66 | +1.74% | 0.89x |
+| SOFI | SoFi Technologies, Inc. | 16.23 | -1.58% | 0.73x |
 
 ---
 ## 四、关键价位
@@ -117,7 +118,7 @@ tags: [trading, premarket, daily]
 | Prior Day High | 681.15 |
 | Prior Day Low | 673.77 |
 | Prior Day Close | 676.01 |
-| Approx Vwap 5D | 666.47 |
+| Approx Vwap 5D | 666.54 |
 | Weekly High | 681.15 |
 | Weekly Low | 645.11 |
 
@@ -128,7 +129,7 @@ tags: [trading, premarket, daily]
 | Prior Day High | 610.36 |
 | Prior Day Low | 603.03 |
 | Prior Day Close | 606.09 |
-| Approx Vwap 5D | 595.5 |
+| Approx Vwap 5D | 595.56 |
 | Weekly High | 610.36 |
 | Weekly Low | 571.92 |
 
@@ -143,152 +144,14 @@ tags: [trading, premarket, daily]
 | Weekly High | 262.9 |
 | Weekly Low | 244.87 |
 
----
-date: 2026-04-09
-generated: 2026-04-09T12:39:14
-type: premarket
-tags: [trading, premarket, daily]
----
-
-# 盘前分析报告 — 2026-04-09
-*生成时间: 12:39:14 UTC*
-
----
-## 一、宏观环境
-
-### 1.1 指数期货 & VIX
-
-| 品种 | 现价 | 涨跌幅 | 前收 | 日高 | 日低 |
-|------|------|--------|------|------|------|
-| ES=F | 6863.5 | +0.58% | 6823.75 | 6876.0 | 6792.5 |
-| NQ=F | 25223.25 | +0.59% | 25074.25 | 25265.75 | 24953.0 |
-| YM=F | 48456.0 | +0.65% | 48144.0 | 48555.0 | 47902.0 |
-| GC=F | 4798.7 | +0.45% | 4777.2 | 4826.0 | 4718.6 |
-| ^VIX | 19.78 | -5.99% | 25.78 | 21.63 | 19.64 |
-
-### 1.2 隔夜走势（Globex）
-
-| 品种 | 隔夜高 | 隔夜低 | 区间 | 亚洲高 | 亚洲低 | 欧洲高 | 欧洲低 |
-|------|--------|--------|------|--------|--------|--------|--------|
-| ES=F | 6876.0 | 6792.5 | 83.5 | 6816.25 | 6805.0 | 6817.25 | 6792.5 |
-| NQ=F | 25265.75 | 24953.0 | 312.75 | 25047.0 | 24994.25 | 25059.0 | 24953.0 |
-| YM=F | 48555.0 | 47902.0 | 653.0 | 48105.0 | 48035.0 | 48105.0 | 47902.0 |
-| GC=F | 4826.0 | 4727.2 | 98.8 | 4749.6 | 4729.1 | 4782.7 | 4727.2 |
-| ^VIX | 21.63 | 19.64 | 1.99 | — | — | 21.63 | 21.12 |
-
-### 1.3 板块强弱
-
-| ETF | 板块 | 涨跌幅 |
-|-----|------|--------|
-| XLY | Consumer Discretionary | +1.84% |
-| XLI | Industrials | +1.18% |
-| XLU | Utilities | +1.04% |
-| XLRE | Real Estate | +0.90% |
-| XLP | Consumer Staples | +0.89% |
-| XLC | Communication | +0.50% |
-| XLF | Financials | +0.38% |
-| XLK | Technology | +0.16% |
-| XLB | Materials | +0.11% |
-| XLV | Healthcare | -0.12% |
-| XLE | Energy | -1.08% |
-
----
-## 二、消息面
-
-- **The S&P 500 Is Back Above 6800. It’s a ‘Clear Positive.’** — *Barrons.com*
-  > The S&P 500's early-afternoon rally put the index on track to close above the 6800 level.  Jonathan Krinsky, BTIG’s chief market technician, tells Barron’s that closing above that level would be a “cl
-- **Pre-Markets Down on Big Morning for Econ Data** — *Zacks*
-  > Lots of economic data is out today, but all eyes remain trained on the Middle East this morning.
-- **Exchange-Traded Funds, Equity Futures Lower Pre-Bell Thursday as Fragile Middle East Ceasefire Lifts Oil Prices** — *MT Newswires*
-  > The broad market exchange-traded fund SPDR S&P 500 ETF Trust (SPY) was down 0.4% and the actively tr
-- **A rare S&P 500 gap-up on Wednesday: What history tells us happens next** — *Investing.com*
-  > Investing.com -- Wednesday's sharp gap-up open in U.S. equities is a rare technical event, according to BTIG, with the firm stating in a note that the next few days will be decisive in determining whe
-- **Trump's War On The World Makes 3 Nations Great (Not The U.S.)** — *Investor's Business Daily*
-  > President Donald Trump promised to "make America great again." But his policies seem to be helping other countries more than the U.S.
-- **VOO vs. QQQ: Broad Market Exposure or Concentrated Mega-Cap Growth?** — *Motley Fool*
-  > The Vanguard S&P 500 ETF (VOO) and the Invesco QQQ Trust (QQQ) both provide exposure to large U.S. companies, but their portfolios differ in concentration and structure. This comparison examines how b
-- **Exchange-Traded Funds Edge Higher as US Equities Rise After Midday** — *MT Newswires*
-  > Broad Market Indicators Broad-market exchange-traded funds IWM and IVV advanced. Actively traded
-- **JPMorgan sees stock market boost as macro funds return** — *Investing.com*
-  > Investing.com -- JPMorgan is predicting a near-term boost to equity markets as macro hedge funds are forced to rebuild their stock exposures following the sharp pullback in March, with large U.S. tech
-- **Gold ETFs May Still Have More to Offer: Don't Look Away Yet** — *Zacks*
-  > Gold ETFs may still shine despite volatility, as safe-haven demand, central bank buying and geopolitical risks support long-term upside.
-- **Wall Street Fear Index Rises as Iran Cease-Fire Rally Fades** — *Barrons.com*
-  > The most widely followed gauge of market fear and uncertainty was rising on Thursday, suggesting investors were feeling nervous as the cease-fire between the U.S. and Iran showed signs of cracking.  T
-- **From Euphoria to Caution. Wall Street Sees the Iran War Cease-Fire as Just a ‘Reprieve.’** — *Barrons.com*
-  > Wall Street loses some of its enthusiasm over the two-week cease-fire as oil prices rebound and key questions linger.
-- **Market indexes soared on the Iran truce, but risks remain** — *Motley Fool*
-  > Wall Street loved the Iran truce on Wednesday. Is the optimism justified?
-- **Why the S&P 500 Is Soaring—and Can Keep Rallying—Even If the Cease-Fire Is Just a ‘Fragile Truce’** — *Barrons.com*
-  > Wall Street loves the cease-fire announcement but will it still embrace the deal once terms are ironed out?
-- **Adam Back examines bitcoin's evolution into an asset class** — *Yahoo Finance Video*
-  > The New York Times suggested that the true identity of the creator of bitcoin (BTC-USD) may be Adam Back, who many speculate is using the pseudonym Satoshi Nakamoto. Back has since refuted these claim
-- **Gold and silver prices today, Thursday, April 9: Prices steady amid conflicting reports on the Strait of Hormuz** — *Yahoo Personal Finance*
-  > Gold (GC=F) June futures opened at $4,744.80 per troy ounce on Thursday, 0.7% lower than Wednesday’s closing price of $4,777.20.
-- **G Mining Ventures leaps toward scale in Guyana with G2 acquisition: analysts** — *Proactive*
-  > G Mining Ventures Corp (TSX:GMIN, OTCQX:GMINF, FRA:W97) made a big leap toward becoming a top-tier gold producer with its C$3 billion acquisition of G2 Goldfields, prompting analysts to call it a tran
-- **Kobo Resources Jumps 9% at It Raises $5.53 Million in a Private Placement of Shares, Provides Operations Update** — *MT Newswires*
-  > Kobo Resources (KRI.V), up 9% on last look, on Thursday said it is raising $5.53 million in a privat
-- **Update: Gold Climbs as a U.S. Inflation Measure Rose in February, While the U.S. and Iran Dispute Ceasefire Terms** — *MT Newswires*
-  > (Updates prices.) Gold traded higher midafternoon on Thursday as the dollar weakened after the Un
-- **FTSE 100 and US stocks dive and oil swings amid Iran war jitters** — *Yahoo Finance UK*
-  > Investors assess reports that Trump administration is considering occupying or blockading Kharg Island
-- **FTSE 100 and US stocks rally with Fed meeting and Iran conflict in view** — *Yahoo Finance UK*
-  > The Fed begins its two-day meeting on Tuesday, with its second policy decision of the year and comments from chair Jerome Powell to follow
-
----
-## 三、盘前异动
-
-| 代码 | 名称 | 现价 | 缺口 | 量比 |
-|------|------|------|------|------|
-| PLTR | Palantir Technologies Inc. | 128.82 | -8.48% | 2.09x |
-| AMZN | Amazon.com, Inc. | 232.9 | +5.27% | 1.19x |
-| COIN | Coinbase Global, Inc. | 168.73 | -3.63% | 0.89x |
-| NFLX | Netflix, Inc. | 102.31 | +2.93% | 0.69x |
-| META | Meta Platforms, Inc. | 629.7 | +2.82% | 0.7x |
-| MARA | MARA Holdings, Inc. | 9.72 | +2.32% | 0.87x |
-| AMD | Advanced Micro Devices, Inc. | 236.86 | +2.17% | 0.59x |
-| BAC | Bank of America Corporation | 52.79 | +1.75% | 0.53x |
-
----
-## 四、关键价位
-
-### SPY
-
-| 价位类型 | 价格 |
-|----------|------|
-| Prior Day High | 681.15 |
-| Prior Day Low | 673.77 |
-| Prior Day Close | 676.01 |
-| Approx Vwap 5D | 666.48 |
-| Weekly High | 681.15 |
-| Weekly Low | 645.11 |
-
-### QQQ
-
-| 价位类型 | 价格 |
-|----------|------|
-| Prior Day High | 610.36 |
-| Prior Day Low | 603.03 |
-| Prior Day Close | 606.09 |
-| Approx Vwap 5D | 595.5 |
-| Weekly High | 610.36 |
-| Weekly Low | 571.92 |
-
-### IWM
-
-| 价位类型 | 价格 |
-|----------|------|
-| Prior Day High | 262.9 |
-| Prior Day Low | 258.8 |
-| Prior Day Close | 260.47 |
-| Approx Vwap 5D | 256.07 |
-| Weekly High | 262.9 |
-| Weekly Low | 244.87 |
-
 
 AI analysis prompt saved to: data/exports/ai-analysis-prompt.md
 Paste the prompt content to Claude Code for AI-powered analysis.
+[12:47:44] Step 2: Running AI analysis...
+[12:49:32] AI analysis saved to data/exports/ai-analysis-2026-04-09.md
+[12:49:32] Step 3: Merging final report...
+[12:49:32] Final report synced to Obsidian
+[12:49:32] Step 4: Generating Pine Scripts...
 Pine Script saved to: scripts/levels-SPY-2026-04-09.pine
 //@version=5
 indicator("DayTrader Levels — SPY (2026-04-09)", overlay=true)
@@ -296,7 +159,7 @@ indicator("DayTrader Levels — SPY (2026-04-09)", overlay=true)
 hline(681.15, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
 hline(673.77, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
 hline(676.01, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
-hline(666.47, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(666.5, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
 hline(681.15, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
 hline(645.11, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
 
@@ -307,7 +170,7 @@ indicator("DayTrader Levels — QQQ (2026-04-09)", overlay=true)
 hline(610.36, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
 hline(603.03, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
 hline(606.09, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
-hline(595.5, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(595.56, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
 hline(610.36, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
 hline(571.92, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
 
@@ -318,7 +181,7 @@ indicator("DayTrader Levels — ES=F (2026-04-09)", overlay=true)
 hline(6876.0, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
 hline(6792.5, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
 hline(6823.75, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
-hline(6750.22, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(6751.32, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
 hline(6876.0, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
 hline(6567.0, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
 
@@ -329,7 +192,7 @@ indicator("DayTrader Levels — NQ=F (2026-04-09)", overlay=true)
 hline(25265.75, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
 hline(24953.0, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
 hline(25074.25, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
-hline(24756.39, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(24762.22, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
 hline(25265.75, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
 hline(23941.5, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
 
@@ -340,9 +203,8 @@ indicator("DayTrader Levels — GC=F (2026-04-09)", overlay=true)
 hline(4826.0, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
 hline(4718.6, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
 hline(4777.2, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
-hline(4797.84, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(4794.76, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
 hline(4851.0, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
 hline(4605.0, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
 
-Completed at: Thu  9 Apr 2026 12:39:17 PDT
-==================================
+[12:49:36] === Completed ===
