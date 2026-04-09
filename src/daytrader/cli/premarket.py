@@ -72,10 +72,54 @@ def pre_analyze(ctx: click.Context) -> None:
 @click.argument("symbol", default="SPY")
 @click.pass_context
 def pre_pine(ctx: click.Context, symbol: str) -> None:
-    """Generate Pine Script for key levels."""
+    """Generate Pine Script for key levels (works with ETFs and futures)."""
+    from daytrader.premarket.collectors.base import CollectorResult
+    from datetime import datetime, timezone
+
     collector = MarketDataCollector()
     collector.register(LevelsCollector(symbols=[symbol]))
+    collector.register(FuturesCollector(symbols=[symbol]))
     results = asyncio.run(collector.collect_all())
+
+    # Merge futures data into levels format if levels is empty for this symbol
+    levels_result = results.get("levels")
+    futures_result = results.get("futures")
+
+    if (not levels_result or symbol not in levels_result.data or not levels_result.data[symbol]) \
+            and futures_result and futures_result.success and symbol in futures_result.data:
+        fd = futures_result.data[symbol]
+        merged_levels = {}
+        if fd.get("prev_close"):
+            merged_levels["prior_day_close"] = fd["prev_close"]
+        if fd.get("day_high"):
+            merged_levels["day_high"] = fd["day_high"]
+        if fd.get("day_low"):
+            merged_levels["day_low"] = fd["day_low"]
+        if fd.get("overnight_high"):
+            merged_levels["overnight_high"] = fd["overnight_high"]
+        if fd.get("overnight_low"):
+            merged_levels["overnight_low"] = fd["overnight_low"]
+        if fd.get("asia_high"):
+            merged_levels["asia_session_high"] = fd["asia_high"]
+        if fd.get("asia_low"):
+            merged_levels["asia_session_low"] = fd["asia_low"]
+        if fd.get("europe_high"):
+            merged_levels["europe_session_high"] = fd["europe_high"]
+        if fd.get("europe_low"):
+            merged_levels["europe_session_low"] = fd["europe_low"]
+
+        results["levels"] = CollectorResult(
+            collector_name="levels",
+            timestamp=datetime.now(timezone.utc),
+            data={symbol: merged_levels},
+            success=True,
+        )
+
     renderer = PineScriptRenderer()
+    code = renderer.render(results, symbol=symbol)
+    if not code:
+        click.echo(f"No level data available for {symbol}")
+        return
     path = renderer.render_and_save(results, symbol=symbol)
     click.echo(f"Pine Script saved to: {path}")
+    click.echo(code)

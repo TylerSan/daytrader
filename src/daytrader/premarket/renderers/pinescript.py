@@ -61,6 +61,7 @@ class PineScriptRenderer:
         code = self.render(results, symbol=symbol)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         today = date.today().isoformat()
-        path = self._output_dir / f"levels-{symbol}-{today}.pine"
+        safe_symbol = symbol.replace("=", "").replace("^", "")
+        path = self._output_dir / f"levels-{safe_symbol}-{today}.pine"
         path.write_text(code)
         return path
