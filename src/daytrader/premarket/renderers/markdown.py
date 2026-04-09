@@ -12,7 +12,12 @@ class MarkdownRenderer:
     def __init__(self, output_dir: str = "data/exports") -> None:
         self._output_dir = Path(output_dir)
 
-    def render(self, results: dict[str, CollectorResult], date: date) -> str:
+    def render(
+        self,
+        results: dict[str, CollectorResult],
+        date: date,
+        ai_analysis: str = "",
+    ) -> str:
         sections = [
             f"# Pre-Market Report — {date.isoformat()}\n",
             f"*Generated at {datetime.now().strftime('%H:%M:%S')} UTC*\n",
@@ -61,10 +66,22 @@ class MarkdownRenderer:
                         sections.append(f"| {label} | {price} |")
                 sections.append("")
 
+        # AI Analysis section
+        if ai_analysis:
+            sections.append("---\n")
+            sections.append("## AI 技术分析 & 操盘建议\n")
+            sections.append(ai_analysis)
+            sections.append("")
+
         return "\n".join(sections)
 
-    def render_and_save(self, results: dict[str, CollectorResult], date: date) -> Path:
-        content = self.render(results, date)
+    def render_and_save(
+        self,
+        results: dict[str, CollectorResult],
+        date: date,
+        ai_analysis: str = "",
+    ) -> Path:
+        content = self.render(results, date, ai_analysis=ai_analysis)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         path = self._output_dir / f"premarket-{date.isoformat()}.md"
         path.write_text(content)
