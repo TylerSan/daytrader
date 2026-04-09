@@ -48,7 +48,7 @@ def sample_results() -> dict[str, CollectorResult]:
 def test_markdown_renderer_produces_report(sample_results):
     renderer = MarkdownRenderer()
     report = renderer.render(sample_results, date=datetime(2026, 4, 9).date())
-    assert "# Pre-Market Report" in report
+    assert "盘前分析报告" in report
     assert "2026-04-09" in report
     assert "ES=F" in report
     assert "5425.5" in report
@@ -62,4 +62,4 @@ def test_markdown_renderer_saves_to_file(sample_results, tmp_dir):
     path = renderer.render_and_save(sample_results, date=datetime(2026, 4, 9).date())
     assert path.exists()
     content = path.read_text()
-    assert "Pre-Market Report" in content
+    assert "盘前分析报告" in content

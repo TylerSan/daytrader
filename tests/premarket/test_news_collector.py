@@ -38,10 +38,12 @@ async def test_news_collector_deduplicates():
 
 
 @pytest.mark.asyncio
-async def test_news_collector_handles_error():
+async def test_news_collector_graceful_on_symbol_error():
+    """Per-symbol errors are swallowed — returns success with empty headlines."""
     collector = NewsCollector(symbols=["SPY"])
     with patch("daytrader.premarket.collectors.news.yf.Ticker") as mock_cls:
         mock_cls.side_effect = Exception("API error")
         result = await collector.collect()
 
-    assert result.success is False
+    assert result.success is True
+    assert result.data["headlines"] == []
