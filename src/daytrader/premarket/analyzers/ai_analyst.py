@@ -1,13 +1,6 @@
-"""AI-powered technical analysis and trading suggestions using Claude API."""
+"""AI analysis prompt builder — generates structured prompts for Claude Code to analyze."""
 
 from __future__ import annotations
-
-import asyncio
-import json
-from datetime import datetime, timezone
-
-import yfinance as yf
-from anthropic import AsyncAnthropic
 
 from daytrader.premarket.collectors.base import CollectorResult
 
@@ -21,52 +14,35 @@ CORE_INSTRUMENTS = {
     "QQQ": "Invesco QQQ Trust",
 }
 
-_SYSTEM_PROMPT = """\
-You are an elite day trading analyst specializing in order flow and price action analysis \
-for US stock and futures markets. Your audience is an experienced scalper who trades \
-stacked imbalances on footprint charts with tight stops and high R:R.
+_ANALYSIS_PROMPT = """\
+你是一位顶级日内交易分析师，专注于订单流和价格行为分析。你的受众是一位经验丰富的超短线交易者，\
+使用 footprint 图表上的堆叠失衡信号进行交易，紧止损、高盈亏比。
 
-Your analysis must be:
-- Actionable and specific (exact price levels, not vague ranges)
-- Multi-timeframe (weekly → daily → hourly → 5min context)
-- Focused on levels where order flow imbalances are likely to appear
-- Aware of the current VIX regime and its impact on strategy
-- Written in concise, professional trading language
+请基于以下实时市场数据，为今日盘前提供完整的技术分析和操盘建议。
 
-For each instrument, provide your analysis in the EXACT format below. Use Chinese for the output.\
-"""
+## 实时市场数据
 
-_ANALYSIS_PROMPT_TEMPLATE = """\
-Based on the following market data, provide a complete pre-market technical analysis \
-and trading plan for today's session.
-
-## Current Market Data
-
-### Futures & VIX
+### 期货 & VIX
 {futures_data}
 
-### Sector Performance
+### 板块表现
 {sector_data}
 
-### Key Levels
+### 关键价位
 {levels_data}
 
-### Historical Price Data (recent sessions)
-{history_data}
+---
 
-## Instructions
+请对以下每个品种进行分析: {instruments}
 
-For EACH of these instruments: {instruments}
+对每个品种使用以下结构:
 
-Provide analysis in this EXACT structure:
-
-### [Instrument Name]
+### [品种名称]
 
 **多时间框架分析:**
 - 周线: [趋势方向, 关键区域]
 - 日线: [趋势, 近期形态, 关键MA位置]
 - 小时线: [盘中结构, 趋势]
-- 5分钟: [盘前走势, 开盘预期]
 
 **关键价位:**
 - 强阻力: [价位] — [原因]
@@ -76,7 +52,7 @@ Provide analysis in this EXACT structure:
 - 强支撑: [价位] — [原因]
 
 **订单流关注点:**
-- [描述在哪些价位最可能出现堆叠失衡信号, 以及预期方向]
+- [在哪些价位最可能出现堆叠失衡信号, 预期方向]
 
 **今日操盘建议:**
 - 方向偏好: [多/空/观望] (置信度: [高/中/低])
@@ -88,7 +64,7 @@ Provide analysis in this EXACT structure:
 
 ---
 
-After all instruments, add a section:
+最后增加:
 
 ### 今日市场总览
 - 整体市场情绪: [风险偏好/风险厌恶/中性]
@@ -111,100 +87,40 @@ def _format_dict(data: dict, indent: int = 0) -> str:
     return "\n".join(lines)
 
 
-async def _fetch_history(symbols: list[str], period: str = "1mo") -> dict:
-    """Fetch recent price history for AI context."""
+def build_analysis_prompt(
+    collected_data: dict[str, CollectorResult],
+    extra_symbols: list[str] | None = None,
+) -> str:
+    """Build the AI analysis prompt from collected market data.
 
-    def _do_fetch() -> dict:
-        result = {}
-        for symbol in symbols:
-            try:
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(period=period)
-                if hist.empty:
-                    continue
-                # Last 10 sessions summary
-                recent = hist.tail(10)
-                sessions = []
-                for date_idx, row in recent.iterrows():
-                    sessions.append({
-                        "date": str(date_idx.date()),
-                        "open": round(float(row["Open"]), 2),
-                        "high": round(float(row["High"]), 2),
-                        "low": round(float(row["Low"]), 2),
-                        "close": round(float(row["Close"]), 2),
-                        "volume": int(row["Volume"]),
-                    })
-                result[symbol] = sessions
-            except Exception:
-                result[symbol] = []
-        return result
+    Returns a prompt string that can be passed to Claude Code for analysis.
+    """
+    all_symbols = list(CORE_INSTRUMENTS.keys()) + (extra_symbols or [])
+    instrument_names = [
+        f"{sym} ({CORE_INSTRUMENTS.get(sym, sym)})" for sym in all_symbols
+    ]
 
-    return await asyncio.to_thread(_do_fetch)
+    futures_data = "No data"
+    if "futures" in collected_data and collected_data["futures"].success:
+        futures_data = _format_dict(collected_data["futures"].data)
 
+    sector_data = "No data"
+    if "sectors" in collected_data and collected_data["sectors"].success:
+        sector_data = _format_dict(collected_data["sectors"].data)
 
-class AIAnalyst:
-    """Claude-powered market analyst for pre-market technical analysis."""
+    levels_data = "No data"
+    if "levels" in collected_data and collected_data["levels"].success:
+        levels_data = _format_dict(collected_data["levels"].data)
 
-    def __init__(
-        self,
-        model: str = "claude-sonnet-4-20250514",
-        extra_symbols: list[str] | None = None,
-    ) -> None:
-        self._client = AsyncAnthropic()
-        self._model = model
-        self._extra_symbols = extra_symbols or []
+    vix = "N/A"
+    if "futures" in collected_data and collected_data["futures"].success:
+        vix_data = collected_data["futures"].data.get("^VIX", {})
+        vix = vix_data.get("price", "N/A")
 
-    async def analyze(
-        self,
-        collected_data: dict[str, CollectorResult],
-    ) -> str:
-        """Run AI analysis on collected market data, return markdown analysis."""
-
-        # Determine instruments to analyze
-        all_symbols = list(CORE_INSTRUMENTS.keys()) + self._extra_symbols
-        instrument_names = [
-            f"{sym} ({CORE_INSTRUMENTS.get(sym, sym)})" for sym in all_symbols
-        ]
-
-        # Fetch historical data for AI context
-        history = await _fetch_history(all_symbols)
-
-        # Build prompt sections
-        futures_data = "No data"
-        if "futures" in collected_data and collected_data["futures"].success:
-            futures_data = _format_dict(collected_data["futures"].data)
-
-        sector_data = "No data"
-        if "sectors" in collected_data and collected_data["sectors"].success:
-            sector_data = _format_dict(collected_data["sectors"].data)
-
-        levels_data = "No data"
-        if "levels" in collected_data and collected_data["levels"].success:
-            levels_data = _format_dict(collected_data["levels"].data)
-
-        history_data = _format_dict(history) if history else "No historical data available"
-
-        # Get VIX value
-        vix = "N/A"
-        if "futures" in collected_data and collected_data["futures"].success:
-            vix_data = collected_data["futures"].data.get("^VIX", {})
-            vix = vix_data.get("price", "N/A")
-
-        prompt = _ANALYSIS_PROMPT_TEMPLATE.format(
-            futures_data=futures_data,
-            sector_data=sector_data,
-            levels_data=levels_data,
-            history_data=history_data,
-            instruments=", ".join(instrument_names),
-            vix=vix,
-        )
-
-        # Call Claude API
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=8000,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response.content[0].text
+    return _ANALYSIS_PROMPT.format(
+        futures_data=futures_data,
+        sector_data=sector_data,
+        levels_data=levels_data,
+        instruments=", ".join(instrument_names),
+        vix=vix,
+    )
