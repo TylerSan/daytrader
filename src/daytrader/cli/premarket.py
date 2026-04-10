@@ -51,21 +51,22 @@ def _build_checklist(output_dir: str = "data/exports") -> PremarketChecklist:
 
 @click.command("run")
 @click.option("--push", is_flag=True, help="Push report to notification channels")
-@click.option("--ai", is_flag=True, help="Also output AI analysis prompt for Claude Code")
+@click.option(
+    "--ai",
+    is_flag=True,
+    help="Also invoke Claude CLI for AI technical analysis (slow, ~1-3 min)",
+)
 @click.pass_context
 def pre_run(ctx: click.Context, push: bool, ai: bool) -> None:
-    """Run full pre-market analysis."""
+    """Run full pre-market analysis (data + info cards, optionally + AI)."""
     checklist = _build_checklist()
 
     if ai:
-        report, ai_prompt = asyncio.run(checklist.run_with_prompt())
-        click.echo(report)
-        click.echo("\n---\n")
-        click.echo("## AI 分析提示词（请将以下内容发送给 Claude 进行分析）\n")
-        click.echo(ai_prompt)
+        click.echo("Running full analysis with AI (this may take 1-3 minutes)...", err=True)
+        report = asyncio.run(checklist.run_full())
     else:
         report = asyncio.run(checklist.run())
-        click.echo(report)
+    click.echo(report)
 
     if push:
         click.echo("\n[Push notifications not yet configured]")

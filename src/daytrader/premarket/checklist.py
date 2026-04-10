@@ -6,7 +6,10 @@ import logging
 from datetime import date
 from pathlib import Path
 
-from daytrader.premarket.analyzers.ai_analyst import build_analysis_prompt
+from daytrader.premarket.analyzers.ai_analyst import (
+    build_analysis_prompt,
+    invoke_claude_analysis,
+)
 from daytrader.premarket.collectors.base import CollectorResult, MarketDataCollector
 from daytrader.premarket.renderers.cards import CardGenerator
 from daytrader.premarket.renderers.markdown import MarkdownRenderer
@@ -51,6 +54,44 @@ class PremarketChecklist:
                 renderer.render_and_save(
                     results,
                     date=target_date,
+                    obsidian_path=self._obsidian_path,
+                    card_images=card_images,
+                )
+
+        return report
+
+    async def run_full(self, target_date: date | None = None) -> str:
+        """Run full pipeline: data + cards + AI analysis, rendered into one report.
+
+        Invokes Claude CLI to generate AI analysis. If AI invocation fails or
+        times out, the report is still saved (without AI section).
+        """
+        target_date = target_date or date.today()
+        results = await self._collector.collect_all()
+        card_images = self._generate_cards(results, target_date)
+
+        # Invoke AI analysis (best-effort, may return "" on failure)
+        ai_prompt = build_analysis_prompt(results)
+        _log.info("Invoking Claude for AI analysis (this may take a few minutes)...")
+        ai_analysis = invoke_claude_analysis(ai_prompt)
+        if ai_analysis:
+            _log.info("AI analysis received (%d chars)", len(ai_analysis))
+        else:
+            _log.warning("AI analysis unavailable; report will be saved without it")
+
+        report = ""
+        for renderer in self._renderers:
+            if isinstance(renderer, MarkdownRenderer):
+                report = renderer.render(
+                    results,
+                    date=target_date,
+                    ai_analysis=ai_analysis,
+                    card_images=card_images,
+                )
+                renderer.render_and_save(
+                    results,
+                    date=target_date,
+                    ai_analysis=ai_analysis,
                     obsidian_path=self._obsidian_path,
                     card_images=card_images,
                 )

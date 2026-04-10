@@ -2,7 +2,47 @@
 
 from __future__ import annotations
 
+import logging
+import subprocess
+
 from daytrader.premarket.collectors.base import CollectorResult
+
+_log = logging.getLogger(__name__)
+
+CLAUDE_BIN = "/opt/homebrew/bin/claude"
+AI_TIMEOUT = 600  # seconds (AI analysis can take a few minutes)
+
+
+def invoke_claude_analysis(prompt: str, timeout: int = AI_TIMEOUT) -> str:
+    """Invoke Claude CLI to run the analysis prompt. Returns the text output.
+
+    Returns an empty string on failure (timeout, non-zero exit, or exception).
+    Never raises — AI analysis is best-effort and must not break report rendering.
+    """
+    try:
+        result = subprocess.run(
+            [CLAUDE_BIN, "-p", prompt, "--output-format", "text"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        _log.warning(
+            "Claude AI analysis failed (rc=%d): %s",
+            result.returncode,
+            result.stderr[:300],
+        )
+        return ""
+    except subprocess.TimeoutExpired:
+        _log.warning("Claude AI analysis timed out after %ds", timeout)
+        return ""
+    except FileNotFoundError:
+        _log.warning("Claude CLI not found at %s", CLAUDE_BIN)
+        return ""
+    except Exception as e:
+        _log.warning("Claude AI analysis error: %s", e)
+        return ""
 
 
 # Instruments grouped by type to prevent level confusion
