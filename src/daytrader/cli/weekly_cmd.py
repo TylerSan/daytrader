@@ -65,6 +65,27 @@ def weekly_analyze() -> None:
     click.echo('发送 "执行周计划AI分析" 获取完整智能周度计划。')
 
 
+@click.command("cards")
+@click.option("--date", "target_date", default=None, help="Date in YYYY-MM-DD format")
+def weekly_cards(target_date: str | None) -> None:
+    """Generate info-card images for a weekly report."""
+    from datetime import date as date_cls
+    from daytrader.premarket.renderers.cards import CardGenerator
+
+    d = date_cls.fromisoformat(target_date) if target_date else date_cls.today()
+    generator = _build_weekly_generator()
+    results = asyncio.run(generator._collector.collect_all())
+
+    gen = CardGenerator()
+    paths = gen.generate_weekly_cards(results, d)
+    if paths:
+        click.echo(f"Generated {len(paths)} card(s):")
+        for p in paths:
+            click.echo(f"  {p}")
+    else:
+        click.echo("No cards generated (data may be unavailable or generation failed).")
+
+
 @click.command("save")
 def weekly_save() -> None:
     """Generate and save weekly plan to file."""

@@ -88,6 +88,28 @@ def pre_analyze(ctx: click.Context) -> None:
     click.echo("Paste the prompt content to Claude Code for AI-powered analysis.")
 
 
+@click.command("cards")
+@click.option("--date", "target_date", default=None, help="Date in YYYY-MM-DD format")
+@click.pass_context
+def pre_cards(ctx: click.Context, target_date: str | None) -> None:
+    """Generate info-card images for a pre-market report."""
+    from datetime import date as date_cls
+    from daytrader.premarket.renderers.cards import CardGenerator
+
+    d = date_cls.fromisoformat(target_date) if target_date else date_cls.today()
+    checklist = _build_checklist()
+    results = asyncio.run(checklist._collector.collect_all())
+
+    gen = CardGenerator()
+    paths = gen.generate_premarket_cards(results, d)
+    if paths:
+        click.echo(f"Generated {len(paths)} card(s):")
+        for p in paths:
+            click.echo(f"  {p}")
+    else:
+        click.echo("No cards generated (data may be unavailable or generation failed).")
+
+
 @click.command("pine")
 @click.argument("symbol", default="SPY")
 @click.pass_context

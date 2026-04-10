@@ -38,17 +38,19 @@ def weekly() -> None:
     """Weekly trading plan."""
 
 
-from daytrader.cli.premarket import pre_run, pre_pine, pre_analyze
+from daytrader.cli.premarket import pre_run, pre_pine, pre_analyze, pre_cards
 
 pre.add_command(pre_run)
 pre.add_command(pre_pine)
 pre.add_command(pre_analyze)
+pre.add_command(pre_cards)
 
-from daytrader.cli.weekly_cmd import weekly_run, weekly_save, weekly_analyze
+from daytrader.cli.weekly_cmd import weekly_run, weekly_save, weekly_analyze, weekly_cards
 
 weekly.add_command(weekly_run)
 weekly.add_command(weekly_save)
 weekly.add_command(weekly_analyze)
+weekly.add_command(weekly_cards)
 
 
 @cli.group()
