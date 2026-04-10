@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import subprocess
 from datetime import date
 from pathlib import Path
 
 from daytrader.premarket.collectors.base import CollectorResult
+
+_log = logging.getLogger(__name__)
+_CLAUDE_BIN = "/opt/homebrew/bin/claude"
+_TIMEOUT = 120
 
 _STYLE_INSTRUCTIONS = """\
 风格要求：
@@ -108,3 +114,76 @@ class CardGenerator:
             "movers": self._output_dir / f"{prefix}-{d}-movers.webp",
             "levels": self._output_dir / f"{prefix}-{d}-levels.webp",
         }
+
+    def generate_card(self, prompt: str, output_path: Path) -> Path | None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        full_prompt = (
+            f"/image-cards\n\n"
+            f"生成单张信息图卡片，保存为 WebP 格式到 {output_path}\n\n"
+            f"{prompt}"
+        )
+        try:
+            result = subprocess.run(
+                [_CLAUDE_BIN, "-p", full_prompt, "--output-format", "text"],
+                capture_output=True,
+                text=True,
+                timeout=_TIMEOUT,
+                cwd=str(Path(__file__).resolve().parents[4]),
+            )
+            if result.returncode == 0 and output_path.exists():
+                return output_path
+            _log.warning("Card generation failed (rc=%d): %s", result.returncode, result.stderr[:200])
+            return None
+        except subprocess.TimeoutExpired:
+            _log.warning("Card generation timed out after %ds", _TIMEOUT)
+            return None
+        except Exception as e:
+            _log.warning("Card generation error: %s", e)
+            return None
+
+    def generate_premarket_cards(
+        self, results: dict[str, CollectorResult], target_date: date
+    ) -> list[Path]:
+        paths = self.image_paths("premarket", target_date)
+        generated: list[Path] = []
+
+        prompt_builders = [
+            ("overview", self.build_overview_prompt, {"results": results, "target_date": target_date}),
+            ("sectors", self.build_sectors_prompt, {"results": results}),
+            ("movers", self.build_movers_prompt, {"results": results}),
+            ("levels", self.build_levels_prompt, {"results": results}),
+        ]
+
+        for card_name, builder, kwargs in prompt_builders:
+            prompt = builder(**kwargs)
+            if not prompt:
+                continue
+            result = self.generate_card(prompt, paths[card_name])
+            if result:
+                generated.append(result)
+
+        return generated
+
+    def generate_weekly_cards(
+        self, results: dict[str, CollectorResult], target_date: date
+    ) -> list[Path]:
+        paths = self.image_paths("weekly", target_date)
+        generated: list[Path] = []
+
+        # Weekly uses overview, levels, and sectors (3 cards).
+        # Note: the spec's "event risk calendar" card is deferred.
+        prompt_builders = [
+            ("overview", self.build_overview_prompt, {"results": results, "target_date": target_date}),
+            ("levels", self.build_levels_prompt, {"results": results}),
+            ("sectors", self.build_sectors_prompt, {"results": results}),
+        ]
+
+        for card_name, builder, kwargs in prompt_builders:
+            prompt = builder(**kwargs)
+            if not prompt:
+                continue
+            result = self.generate_card(prompt, paths[card_name])
+            if result:
+                generated.append(result)
+
+        return generated

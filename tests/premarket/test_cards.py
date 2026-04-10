@@ -116,3 +116,53 @@ def test_build_prompts_returns_empty_on_missing_data():
     assert gen.build_sectors_prompt(empty) == ""
     assert gen.build_movers_prompt(empty) == ""
     assert gen.build_levels_prompt(empty) == ""
+
+
+# --- generate_card / generate_premarket_cards / generate_weekly_cards ---
+
+from unittest.mock import patch, MagicMock
+import subprocess
+
+
+def test_generate_card_calls_claude_cli(sample_results, tmp_dir):
+    gen = CardGenerator(output_dir=str(tmp_dir))
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = "Image generated successfully"
+
+    with patch("daytrader.premarket.renderers.cards.subprocess.run", return_value=mock_result) as mock_run:
+        path = gen.generate_card(
+            prompt="test prompt",
+            output_path=tmp_dir / "test.webp",
+        )
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args
+        assert "claude" in call_args[0][0][0] or "claude" in str(call_args)
+
+
+def test_generate_card_returns_none_on_failure(tmp_dir):
+    gen = CardGenerator(output_dir=str(tmp_dir))
+    with patch("daytrader.premarket.renderers.cards.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=120)):
+        path = gen.generate_card(
+            prompt="test prompt",
+            output_path=tmp_dir / "test.webp",
+        )
+        assert path is None
+
+
+def test_generate_all_premarket(sample_results, tmp_dir):
+    gen = CardGenerator(output_dir=str(tmp_dir))
+
+    with patch.object(gen, "generate_card", return_value=tmp_dir / "fake.webp") as mock_gen:
+        paths = gen.generate_premarket_cards(sample_results, date(2026, 4, 9))
+        assert mock_gen.call_count == 4  # overview, sectors, movers, levels
+
+
+def test_generate_all_premarket_skips_missing_data(tmp_dir):
+    gen = CardGenerator(output_dir=str(tmp_dir))
+    empty_results = {}
+
+    with patch.object(gen, "generate_card") as mock_gen:
+        paths = gen.generate_premarket_cards(empty_results, date(2026, 4, 9))
+        assert mock_gen.call_count == 0
+        assert paths == []
