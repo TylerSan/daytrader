@@ -11,6 +11,7 @@ from daytrader.premarket.collectors.base import MarketDataCollector
 from daytrader.premarket.collectors.futures import FuturesCollector
 from daytrader.premarket.collectors.sectors import SectorCollector
 from daytrader.premarket.collectors.levels import LevelsCollector
+from daytrader.premarket.collectors.news import NewsCollector
 from daytrader.premarket.weekly import WeeklyPlanGenerator
 
 
@@ -34,6 +35,8 @@ def _build_weekly_generator(output_dir: str = "data/exports") -> WeeklyPlanGener
     collector.register(FuturesCollector())
     collector.register(SectorCollector())
     collector.register(LevelsCollector())
+    # Weekly report pulls more news per symbol to cover weekend coverage
+    collector.register(NewsCollector(max_per_symbol=8))
     return WeeklyPlanGenerator(
         collector=collector,
         output_dir=output_dir,

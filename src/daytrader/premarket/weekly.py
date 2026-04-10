@@ -7,7 +7,10 @@ from pathlib import Path
 
 import logging
 
-from daytrader.premarket.analyzers.ai_analyst import invoke_claude_analysis
+from daytrader.premarket.analyzers.ai_analyst import (
+    invoke_claude_analysis,
+    translate_headlines,
+)
 from daytrader.premarket.collectors.base import CollectorResult, MarketDataCollector
 from daytrader.premarket.renderers.cards import CardGenerator
 from daytrader.premarket.renderers.markdown import _wrap_callout
@@ -128,6 +131,28 @@ class WeeklyPlanGenerator:
             _log.warning("Weekly card generation failed: %s", e)
             return []
 
+    def _translate_news(self, results: dict[str, CollectorResult]) -> None:
+        """Translate English news headlines to Chinese in-place. Never raises."""
+        news = results.get("news")
+        if not news or not news.success or not news.data.get("headlines"):
+            return
+
+        headlines = [item.get("title", "") for item in news.data["headlines"]]
+        headlines = [h for h in headlines if h]
+        if not headlines:
+            return
+
+        _log.info("Translating %d weekly news headlines...", len(headlines))
+        translations = translate_headlines(headlines)
+        if not translations:
+            _log.warning("Weekly news translation unavailable; English only")
+            return
+
+        for item in news.data["headlines"]:
+            title = item.get("title", "")
+            if title in translations:
+                item["title_zh"] = translations[title]
+
     async def generate(self, week_start: date | None = None) -> tuple[str, str]:
         """Generate data report and AI prompt. Returns (data_report, ai_prompt)."""
         week_start = week_start or date.today()
@@ -148,6 +173,9 @@ class WeeklyPlanGenerator:
         week_start = week_start or date.today()
         results = await self._collector.collect_all()
         card_images = self._generate_cards(results, week_start)
+
+        # Translate news headlines to Chinese (best-effort)
+        self._translate_news(results)
 
         data_report = self._render_data(results, week_start, card_images=card_images)
         ai_prompt = self._build_prompt(results, week_start)
@@ -306,6 +334,25 @@ class WeeklyPlanGenerator:
                 sections.extend(_wrap_callout("详细数据：关键价位", table_lines))
             else:
                 sections.extend(table_lines)
+
+        # ═══════════════════════════════════════
+        # News section (weekend / weekly news roundup)
+        # ═══════════════════════════════════════
+        news = results.get("news")
+        if news and news.success and news.data.get("headlines"):
+            sections.append("---")
+            sections.append("## 周末消息面\n")
+            for item in news.data["headlines"]:
+                title = item.get("title", "")
+                title_zh = item.get("title_zh", "")
+                publisher = item.get("publisher", "")
+                pub_info = f" — *{publisher}*" if publisher else ""
+                if title_zh:
+                    sections.append(f"- **{title_zh}**{pub_info}")
+                    sections.append(f"  > {title}")
+                else:
+                    sections.append(f"- **{title}**{pub_info}")
+            sections.append("")
 
         sections.append("---")
         sections.append("*运行 `daytrader weekly analyze` 或发送 \"执行周计划AI分析\" 获取完整智能分析*\n")
