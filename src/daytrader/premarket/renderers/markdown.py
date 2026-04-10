@@ -17,9 +17,11 @@ class MarkdownRenderer:
         results: dict[str, CollectorResult],
         date: date,
         ai_analysis: str = "",
+        card_images: list[Path] | None = None,
     ) -> str:
         sections: list[str] = []
         now = datetime.now()
+        has_cards = bool(card_images)
 
         # Obsidian-compatible YAML frontmatter
         sections.append("---")
@@ -33,6 +35,17 @@ class MarkdownRenderer:
         sections.append(f"*生成时间: {now.strftime('%H:%M:%S')} UTC*\n")
 
         # ═══════════════════════════════════════
+        # 数据速览 (card image snapshot section)
+        # ═══════════════════════════════════════
+        if has_cards:
+            sections.append("---")
+            sections.append("## 数据速览\n")
+            for img in card_images:
+                label = img.stem.split("-", 4)[-1] if "-" in img.stem else img.stem
+                sections.append(f"![{label}](images/{img.name})")
+            sections.append("")
+
+        # ═══════════════════════════════════════
         # Section 1: 宏观环境
         # ═══════════════════════════════════════
         sections.append("---")
@@ -41,9 +54,12 @@ class MarkdownRenderer:
         # 1.1 期货总览
         futures = results.get("futures")
         if futures and futures.success:
-            sections.append("### 1.1 指数期货 & VIX\n")
-            sections.append("| 品种 | 现价 | 涨跌幅 | 前收 | 日高 | 日低 |")
-            sections.append("|------|------|--------|------|------|------|")
+            header_lines = [
+                "### 1.1 指数期货 & VIX\n",
+                "| 品种 | 现价 | 涨跌幅 | 前收 | 日高 | 日低 |",
+                "|------|------|--------|------|------|------|",
+            ]
+            data_lines: list[str] = []
             for sym, data in futures.data.items():
                 if not isinstance(data, dict):
                     continue
@@ -53,8 +69,14 @@ class MarkdownRenderer:
                 high = data.get("day_high", "—")
                 low = data.get("day_low", "—")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
-                sections.append(f"| {sym} | {price} | {change_str} | {prev} | {high} | {low} |")
-            sections.append("")
+                data_lines.append(f"| {sym} | {price} | {change_str} | {prev} | {high} | {low} |")
+            table_lines = header_lines + data_lines + [""]
+            if has_cards:
+                sections.append("> [!info]- 详细数据：指数期货 & VIX")
+                for line in table_lines:
+                    sections.append(f"> {line}")
+            else:
+                sections.extend(table_lines)
 
         # 1.2 隔夜走势
         if futures and futures.success:
@@ -64,9 +86,12 @@ class MarkdownRenderer:
                 if isinstance(d, dict)
             )
             if has_overnight:
-                sections.append("### 1.2 隔夜走势（Globex）\n")
-                sections.append("| 品种 | 隔夜高 | 隔夜低 | 区间 | 亚洲高 | 亚洲低 | 欧洲高 | 欧洲低 |")
-                sections.append("|------|--------|--------|------|--------|--------|--------|--------|")
+                header_lines = [
+                    "### 1.2 隔夜走势（Globex）\n",
+                    "| 品种 | 隔夜高 | 隔夜低 | 区间 | 亚洲高 | 亚洲低 | 欧洲高 | 欧洲低 |",
+                    "|------|--------|--------|------|--------|--------|--------|--------|",
+                ]
+                data_lines = []
                 for sym, data in futures.data.items():
                     if not isinstance(data, dict) or "overnight_high" not in data:
                         continue
@@ -77,26 +102,41 @@ class MarkdownRenderer:
                     al = data.get("asia_low", "—")
                     eh = data.get("europe_high", "—")
                     el = data.get("europe_low", "—")
-                    sections.append(f"| {sym} | {oh} | {ol} | {rng} | {ah} | {al} | {eh} | {el} |")
-                sections.append("")
+                    data_lines.append(f"| {sym} | {oh} | {ol} | {rng} | {ah} | {al} | {eh} | {el} |")
+                table_lines = header_lines + data_lines + [""]
+                if has_cards:
+                    sections.append("> [!info]- 详细数据：隔夜走势")
+                    for line in table_lines:
+                        sections.append(f"> {line}")
+                else:
+                    sections.extend(table_lines)
 
         # 1.3 板块强弱
         sectors = results.get("sectors")
         if sectors and sectors.success:
-            sections.append("### 1.3 板块强弱\n")
             sorted_sectors = sorted(
                 sectors.data.items(),
                 key=lambda x: x[1].get("change_pct") or 0,
                 reverse=True,
             )
-            sections.append("| ETF | 板块 | 涨跌幅 |")
-            sections.append("|-----|------|--------|")
+            header_lines = [
+                "### 1.3 板块强弱\n",
+                "| ETF | 板块 | 涨跌幅 |",
+                "|-----|------|--------|",
+            ]
+            data_lines = []
             for sym, data in sorted_sectors:
                 name = data.get("name", sym)
                 change = data.get("change_pct")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
-                sections.append(f"| {sym} | {name} | {change_str} |")
-            sections.append("")
+                data_lines.append(f"| {sym} | {name} | {change_str} |")
+            table_lines = header_lines + data_lines + [""]
+            if has_cards:
+                sections.append("> [!info]- 详细数据：板块强弱")
+                for line in table_lines:
+                    sections.append(f"> {line}")
+            else:
+                sections.extend(table_lines)
 
         # ═══════════════════════════════════════
         # Section 2: 消息面
@@ -108,11 +148,8 @@ class MarkdownRenderer:
             for item in news.data["headlines"]:
                 title = item.get("title", "")
                 publisher = item.get("publisher", "")
-                summary = item.get("summary", "")
                 pub_info = f" — *{publisher}*" if publisher else ""
                 sections.append(f"- **{title}**{pub_info}")
-                if summary:
-                    sections.append(f"  > {summary}")
             sections.append("")
 
         # ═══════════════════════════════════════
@@ -122,14 +159,23 @@ class MarkdownRenderer:
         if movers and movers.success and movers.data.get("movers"):
             sections.append("---")
             sections.append("## 三、盘前异动\n")
-            sections.append("| 代码 | 名称 | 现价 | 缺口 | 量比 |")
-            sections.append("|------|------|------|------|------|")
+            header_lines = [
+                "| 代码 | 名称 | 现价 | 缺口 | 量比 |",
+                "|------|------|------|------|------|",
+            ]
+            data_lines = []
             for m in movers.data["movers"]:
                 gap_str = f"{m['gap_pct']:+.2f}%"
-                sections.append(
+                data_lines.append(
                     f"| {m['symbol']} | {m['name']} | {m['price']} | {gap_str} | {m['vol_ratio']}x |"
                 )
-            sections.append("")
+            table_lines = header_lines + data_lines + [""]
+            if has_cards:
+                sections.append("> [!info]- 详细数据：盘前异动")
+                for line in table_lines:
+                    sections.append(f"> {line}")
+            else:
+                sections.extend(table_lines)
 
         # ═══════════════════════════════════════
         # Section 4: 关键价位
@@ -139,14 +185,23 @@ class MarkdownRenderer:
             sections.append("---")
             sections.append("## 四、关键价位\n")
             for sym, lvls in levels.data.items():
-                sections.append(f"### {sym}\n")
-                sections.append("| 价位类型 | 价格 |")
-                sections.append("|----------|------|")
+                header_lines = [
+                    f"### {sym}\n",
+                    "| 价位类型 | 价格 |",
+                    "|----------|------|",
+                ]
+                data_lines = []
                 for level_name, price in lvls.items():
                     if price is not None:
                         label = level_name.replace("_", " ").title()
-                        sections.append(f"| {label} | {price} |")
-                sections.append("")
+                        data_lines.append(f"| {label} | {price} |")
+                table_lines = header_lines + data_lines + [""]
+                if has_cards:
+                    sections.append(f"> [!info]- 详细数据：{sym} 关键价位")
+                    for line in table_lines:
+                        sections.append(f"> {line}")
+                else:
+                    sections.extend(table_lines)
 
         # ═══════════════════════════════════════
         # Section 5: AI 技术分析（如有）
@@ -165,8 +220,9 @@ class MarkdownRenderer:
         date: date,
         ai_analysis: str = "",
         obsidian_path: Path | None = None,
+        card_images: list[Path] | None = None,
     ) -> Path:
-        content = self.render(results, date, ai_analysis=ai_analysis)
+        content = self.render(results, date, ai_analysis=ai_analysis, card_images=card_images)
 
         # Save to default output dir
         self._output_dir.mkdir(parents=True, exist_ok=True)
