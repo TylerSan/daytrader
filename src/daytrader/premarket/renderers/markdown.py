@@ -157,9 +157,14 @@ class MarkdownRenderer:
             sections.append("## 二、消息面\n")
             for item in news.data["headlines"]:
                 title = item.get("title", "")
+                title_zh = item.get("title_zh", "")
                 publisher = item.get("publisher", "")
                 pub_info = f" — *{publisher}*" if publisher else ""
-                sections.append(f"- **{title}**{pub_info}")
+                if title_zh:
+                    sections.append(f"- **{title_zh}**{pub_info}")
+                    sections.append(f"  > {title}")
+                else:
+                    sections.append(f"- **{title}**{pub_info}")
             sections.append("")
 
         # ═══════════════════════════════════════

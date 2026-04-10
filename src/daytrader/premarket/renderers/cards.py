@@ -347,70 +347,86 @@ class CardGenerator:
         return output_path
 
     def _render_levels_card(self, data: dict, output_path: Path) -> Path:
+        """Render key levels as a clean table: rows = level types, cols = symbols."""
         symbols = list(data.keys())
-        n = len(symbols)
 
-        fig, axes = plt.subplots(n, 1, figsize=FIGSIZE, facecolor=BG_COLOR)
-        fig.patch.set_facecolor(BG_COLOR)
-        if n == 1:
-            axes = [axes]
+        level_order = [
+            ("weekly_high", "周高", "#FF9500"),
+            ("prior_day_high", "前日高", DOWN_COLOR),
+            ("prior_day_close", "前日收", TEXT_DARK),
+            ("approx_vwap_5d", "VWAP 5D", "#5AC8FA"),
+            ("prior_day_low", "前日低", UP_COLOR),
+            ("weekly_low", "周低", "#5856D6"),
+        ]
 
-        fig.suptitle("关键价位", fontsize=22, fontweight="bold", color=TEXT_DARK, y=0.97)
-
-        level_labels = {
-            "prior_day_high": ("前日高", DOWN_COLOR),
-            "prior_day_low": ("前日低", UP_COLOR),
-            "prior_day_close": ("前日收", TEXT_GRAY),
-            "approx_vwap_5d": ("VWAP5D", "#5AC8FA"),
-            "weekly_high": ("周高", "#FF9500"),
-            "weekly_low": ("周低", "#5856D6"),
-        }
-
-        for ax, sym in zip(axes, symbols):
-            lvls = data[sym]
-            ax.set_facecolor(BG_COLOR)
-
-            prices = {k: v for k, v in lvls.items() if v is not None and k in level_labels}
-            if not prices:
-                ax.axis("off")
-                ax.set_title(sym, fontsize=13, color=TEXT_DARK, loc="left", pad=4)
+        # Build table data
+        row_labels = []
+        row_colors = []
+        cell_text: list[list[str]] = []
+        for key, label, color in level_order:
+            has_any = any(data[sym].get(key) is not None for sym in symbols)
+            if not has_any:
                 continue
+            row_labels.append(label)
+            row_colors.append(color)
+            row = []
+            for sym in symbols:
+                val = data[sym].get(key)
+                row.append(f"{val:.2f}" if val is not None else "—")
+            cell_text.append(row)
 
-            vals = list(prices.values())
-            mn, mx = min(vals), max(vals)
-            span = mx - mn if mx != mn else 1.0
-            margin = span * 0.15
+        fig = plt.figure(figsize=FIGSIZE, facecolor=BG_COLOR)
+        fig.patch.set_facecolor(BG_COLOR)
+        fig.suptitle("关键价位", fontsize=22, fontweight="bold", color=TEXT_DARK, y=0.95)
 
-            ax.set_xlim(mn - margin, mx + margin)
-            ax.set_ylim(-0.5, 1.5)
-            ax.axhline(0.5, color="#C7C7CC", linewidth=1.5, zorder=1)
+        ax = fig.add_axes([0.08, 0.08, 0.84, 0.78])
+        ax.axis("off")
+        ax.set_facecolor(BG_COLOR)
 
-            used_y: list[float] = []
-            for key, price in prices.items():
-                label, color = level_labels[key]
-                # Stagger labels to avoid overlap
-                base_y = 0.85
-                offset = 0
-                for uy in used_y:
-                    if abs(price - uy) < span * 0.08:
-                        offset += 0.25
-                used_y.append(price)
+        table = ax.table(
+            cellText=cell_text,
+            rowLabels=row_labels,
+            colLabels=symbols,
+            loc="center",
+            cellLoc="center",
+            rowLoc="center",
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(14)
+        table.scale(1.0, 2.4)
 
-                ax.vlines(price, 0.3, 0.7, color=color, linewidth=2, zorder=2)
-                ax.text(
-                    price, base_y + offset, f"{label}\n{price:.2f}",
-                    ha="center", va="bottom", fontsize=7.5, color=color,
-                    fontweight="bold",
+        # Style header row (column labels)
+        n_cols = len(symbols)
+        n_rows = len(row_labels)
+        for col in range(n_cols):
+            cell = table[0, col]
+            cell.set_facecolor(CARD_BG)
+            cell.set_text_props(
+                color=TEXT_DARK, fontweight="bold", fontsize=16
+            )
+            cell.set_edgecolor("#D2D2D7")
+            cell.set_linewidth(0.5)
+            cell.set_height(0.09)
+
+        # Style row labels (level type names) with their color
+        for row_idx, color in enumerate(row_colors, start=1):
+            cell = table[row_idx, -1]
+            cell.set_facecolor(CARD_BG)
+            cell.set_text_props(color=color, fontweight="bold", fontsize=13)
+            cell.set_edgecolor("#D2D2D7")
+            cell.set_linewidth(0.5)
+
+        # Style data cells
+        for row_idx in range(1, n_rows + 1):
+            for col_idx in range(n_cols):
+                cell = table[row_idx, col_idx]
+                cell.set_facecolor(BG_COLOR)
+                cell.set_text_props(
+                    color=TEXT_DARK, fontweight="bold", fontsize=15
                 )
+                cell.set_edgecolor("#E5E5EA")
+                cell.set_linewidth(0.5)
 
-            ax.set_title(sym, fontsize=13, fontweight="bold", color=TEXT_DARK, loc="left", pad=4)
-            ax.set_yticks([])
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
-            ax.spines["left"].set_visible(False)
-            ax.tick_params(axis="x", labelsize=8, colors=TEXT_GRAY)
-
-        fig.tight_layout(rect=[0, 0, 1, 0.95], h_pad=2.0)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(str(output_path), dpi=DPI, bbox_inches="tight", facecolor=BG_COLOR)
         plt.close(fig)

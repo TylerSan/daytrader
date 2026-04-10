@@ -9,6 +9,7 @@ from pathlib import Path
 from daytrader.premarket.analyzers.ai_analyst import (
     build_analysis_prompt,
     invoke_claude_analysis,
+    translate_headlines,
 )
 from daytrader.premarket.collectors.base import CollectorResult, MarketDataCollector
 from daytrader.premarket.renderers.cards import CardGenerator
@@ -40,6 +41,28 @@ class PremarketChecklist:
             _log.warning("Card generation failed: %s", e)
             return []
 
+    def _translate_news(self, results: dict[str, CollectorResult]) -> None:
+        """Translate English news headlines to Chinese in-place. Never raises."""
+        news = results.get("news")
+        if not news or not news.success or not news.data.get("headlines"):
+            return
+
+        headlines = [item.get("title", "") for item in news.data["headlines"]]
+        headlines = [h for h in headlines if h]
+        if not headlines:
+            return
+
+        _log.info("Translating %d news headlines to Chinese...", len(headlines))
+        translations = translate_headlines(headlines)
+        if not translations:
+            _log.warning("News translation unavailable; showing English only")
+            return
+
+        for item in news.data["headlines"]:
+            title = item.get("title", "")
+            if title in translations:
+                item["title_zh"] = translations[title]
+
     async def run(self, target_date: date | None = None) -> str:
         target_date = target_date or date.today()
         results = await self._collector.collect_all()
@@ -69,6 +92,9 @@ class PremarketChecklist:
         target_date = target_date or date.today()
         results = await self._collector.collect_all()
         card_images = self._generate_cards(results, target_date)
+
+        # Translate news headlines to Chinese (best-effort)
+        self._translate_news(results)
 
         # Invoke AI analysis (best-effort, may return "" on failure)
         ai_prompt = build_analysis_prompt(results)

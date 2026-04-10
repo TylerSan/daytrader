@@ -13,6 +13,57 @@ CLAUDE_BIN = "/opt/homebrew/bin/claude"
 AI_TIMEOUT = 600  # seconds (AI analysis can take a few minutes)
 
 
+def translate_headlines(
+    headlines: list[str], timeout: int = 120
+) -> dict[str, str]:
+    """Translate English news headlines to Chinese via Claude CLI.
+
+    Returns a dict mapping original English title → Chinese translation.
+    Returns an empty dict on failure (never raises). Any headline not in the
+    returned dict should be shown as English-only.
+    """
+    if not headlines:
+        return {}
+
+    numbered = "\n".join(f"{i + 1}. {h}" for i, h in enumerate(headlines))
+    prompt = (
+        "把以下英文财经新闻标题翻译成中文。每行一条，按编号对齐。"
+        "只输出翻译结果，格式为 `编号. 中文标题`，不要添加任何解释或引号。\n\n"
+        f"{numbered}"
+    )
+    try:
+        result = subprocess.run(
+            [CLAUDE_BIN, "-p", prompt, "--output-format", "text"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if result.returncode != 0:
+            _log.warning("Translation failed (rc=%d)", result.returncode)
+            return {}
+
+        # Parse "1. 中文" lines back into dict
+        translations: dict[str, str] = {}
+        for line in result.stdout.strip().splitlines():
+            line = line.strip()
+            if not line or "." not in line:
+                continue
+            num_str, _, zh = line.partition(".")
+            try:
+                idx = int(num_str.strip()) - 1
+            except ValueError:
+                continue
+            if 0 <= idx < len(headlines):
+                translations[headlines[idx]] = zh.strip()
+        return translations
+    except subprocess.TimeoutExpired:
+        _log.warning("Translation timed out")
+        return {}
+    except Exception as e:
+        _log.warning("Translation error: %s", e)
+        return {}
+
+
 def invoke_claude_analysis(prompt: str, timeout: int = AI_TIMEOUT) -> str:
     """Invoke Claude CLI to run the analysis prompt. Returns the text output.
 
