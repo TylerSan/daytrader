@@ -7,6 +7,7 @@ from pathlib import Path
 
 import logging
 
+from daytrader.premarket.analyzers.ai_analyst import invoke_claude_analysis
 from daytrader.premarket.collectors.base import CollectorResult, MarketDataCollector
 from daytrader.premarket.renderers.cards import CardGenerator
 from daytrader.premarket.renderers.markdown import _wrap_callout
@@ -137,6 +138,53 @@ class WeeklyPlanGenerator:
         ai_prompt = self._build_prompt(results, week_start)
 
         return data_report, ai_prompt
+
+    async def generate_full(self, week_start: date | None = None) -> str:
+        """Run full pipeline: data + cards + AI analysis, merged into one report.
+
+        Invokes Claude CLI to generate the weekly AI analysis. On failure the
+        report is still saved (without the AI section).
+        """
+        week_start = week_start or date.today()
+        results = await self._collector.collect_all()
+        card_images = self._generate_cards(results, week_start)
+
+        data_report = self._render_data(results, week_start, card_images=card_images)
+        ai_prompt = self._build_prompt(results, week_start)
+
+        _log.info("Invoking Claude for weekly AI analysis (may take 1-3 minutes)...")
+        ai_analysis = invoke_claude_analysis(ai_prompt)
+        if ai_analysis:
+            _log.info("Weekly AI analysis received (%d chars)", len(ai_analysis))
+            full_report = (
+                data_report
+                + "\n---\n"
+                + "## AI 周度分析 & 交易计划\n\n"
+                + ai_analysis
+                + "\n"
+            )
+        else:
+            _log.warning("Weekly AI analysis unavailable; saving data report only")
+            full_report = data_report
+
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        path = self._output_dir / f"weekly-{week_start.isoformat()}.md"
+        path.write_text(full_report)
+
+        # Auto-sync to Obsidian vault
+        if self._obsidian_path:
+            self._obsidian_path.mkdir(parents=True, exist_ok=True)
+            obs_file = self._obsidian_path / f"weekly-{week_start.isoformat()}.md"
+            obs_file.write_text(full_report)
+
+            if card_images:
+                obs_images_dir = self._obsidian_path / "images"
+                obs_images_dir.mkdir(parents=True, exist_ok=True)
+                for img in card_images:
+                    if img.exists():
+                        (obs_images_dir / img.name).write_bytes(img.read_bytes())
+
+        return full_report
 
     async def generate_and_save(self, week_start: date | None = None) -> Path:
         week_start = week_start or date.today()

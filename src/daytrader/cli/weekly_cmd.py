@@ -43,11 +43,23 @@ def _build_weekly_generator(output_dir: str = "data/exports") -> WeeklyPlanGener
 
 @click.command("run")
 @click.option("--push", is_flag=True, help="Push plan to notification channels")
-def weekly_run(push: bool) -> None:
-    """Generate weekly trading plan (data overview)."""
+@click.option(
+    "--ai",
+    is_flag=True,
+    help="Also invoke Claude CLI for AI weekly plan analysis (slow, ~1-3 min)",
+)
+def weekly_run(push: bool, ai: bool) -> None:
+    """Generate weekly trading plan (data + info cards, optionally + AI)."""
     generator = _build_weekly_generator()
-    data_report, _ = asyncio.run(generator.generate())
-    click.echo(data_report)
+    if ai:
+        click.echo("Running full weekly analysis with AI (this may take 1-3 minutes)...", err=True)
+        report = asyncio.run(generator.generate_full())
+    else:
+        report, _ = asyncio.run(generator.generate())
+    click.echo(report)
+
+    if push:
+        click.echo("\n[Push notifications not yet configured]")
 
 
 @click.command("analyze")
