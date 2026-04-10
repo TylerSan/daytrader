@@ -5,7 +5,13 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 
+import logging
+
 from daytrader.premarket.collectors.base import CollectorResult, MarketDataCollector
+from daytrader.premarket.renderers.cards import CardGenerator
+from daytrader.premarket.renderers.markdown import _wrap_callout
+
+_log = logging.getLogger(__name__)
 
 
 def _format_dict(data: dict, indent: int = 0) -> str:
@@ -104,24 +110,40 @@ class WeeklyPlanGenerator:
         collector: MarketDataCollector,
         output_dir: str = "data/exports",
         obsidian_weekly_path: Path | None = None,
+        cards_output_dir: str = "data/exports/images",
     ) -> None:
         self._collector = collector
         self._output_dir = Path(output_dir)
         self._obsidian_path = obsidian_weekly_path
+        self._card_generator = CardGenerator(output_dir=cards_output_dir)
+
+    def _generate_cards(
+        self, results: dict[str, CollectorResult], week_start: date
+    ) -> list[Path]:
+        """Generate info cards; never raises."""
+        try:
+            return self._card_generator.generate_weekly_cards(results, week_start)
+        except Exception as e:
+            _log.warning("Weekly card generation failed: %s", e)
+            return []
 
     async def generate(self, week_start: date | None = None) -> tuple[str, str]:
         """Generate data report and AI prompt. Returns (data_report, ai_prompt)."""
         week_start = week_start or date.today()
         results = await self._collector.collect_all()
+        card_images = self._generate_cards(results, week_start)
 
-        data_report = self._render_data(results, week_start)
+        data_report = self._render_data(results, week_start, card_images=card_images)
         ai_prompt = self._build_prompt(results, week_start)
 
         return data_report, ai_prompt
 
     async def generate_and_save(self, week_start: date | None = None) -> Path:
         week_start = week_start or date.today()
-        data_report, _ = await self.generate(week_start)
+        results = await self._collector.collect_all()
+        card_images = self._generate_cards(results, week_start)
+
+        data_report = self._render_data(results, week_start, card_images=card_images)
 
         self._output_dir.mkdir(parents=True, exist_ok=True)
         path = self._output_dir / f"weekly-{week_start.isoformat()}.md"
@@ -132,6 +154,14 @@ class WeeklyPlanGenerator:
             self._obsidian_path.mkdir(parents=True, exist_ok=True)
             obs_file = self._obsidian_path / f"weekly-{week_start.isoformat()}.md"
             obs_file.write_text(data_report)
+
+            # Sync card images to Obsidian
+            if card_images:
+                obs_images_dir = self._obsidian_path / "images"
+                obs_images_dir.mkdir(parents=True, exist_ok=True)
+                for img in card_images:
+                    if img.exists():
+                        (obs_images_dir / img.name).write_bytes(img.read_bytes())
 
         return path
 
@@ -169,7 +199,7 @@ class WeeklyPlanGenerator:
         futures = results.get("futures")
         if futures and futures.success:
             header_lines = [
-                "### 期货 & VIX\n",
+                "### 期货 & VIX",
                 "| 品种 | 现价 | 涨跌幅 | 前收 |",
                 "|------|------|--------|------|",
             ]
@@ -182,13 +212,11 @@ class WeeklyPlanGenerator:
                 prev = data.get("prev_close", "—")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
                 data_lines.append(f"| {sym} | {price} | {change_str} | {prev} |")
-            table_lines = header_lines + data_lines + [""]
+            table_lines = header_lines + data_lines
             if has_cards:
-                sections.append("> [!info]- 详细数据：期货 & VIX")
-                for line in table_lines:
-                    sections.append(f"> {line}")
+                sections.extend(_wrap_callout("详细数据：期货 & VIX", table_lines))
             else:
-                sections.extend(table_lines)
+                sections.extend(table_lines + [""])
 
         sectors = results.get("sectors")
         if sectors and sectors.success:
@@ -198,7 +226,7 @@ class WeeklyPlanGenerator:
                 reverse=True,
             )
             header_lines = [
-                "### 板块强弱\n",
+                "### 板块强弱",
                 "| ETF | 板块 | 涨跌幅 |",
                 "|-----|------|--------|",
             ]
@@ -208,17 +236,15 @@ class WeeklyPlanGenerator:
                 change = data.get("change_pct")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
                 data_lines.append(f"| {sym} | {name} | {change_str} |")
-            table_lines = header_lines + data_lines + [""]
+            table_lines = header_lines + data_lines
             if has_cards:
-                sections.append("> [!info]- 详细数据：板块强弱")
-                for line in table_lines:
-                    sections.append(f"> {line}")
+                sections.extend(_wrap_callout("详细数据：板块强弱", table_lines))
             else:
-                sections.extend(table_lines)
+                sections.extend(table_lines + [""])
 
         levels = results.get("levels")
         if levels and levels.success:
-            header_lines = ["### 关键价位\n"]
+            header_lines = ["### 关键价位"]
             data_lines = []
             for sym, lvls in levels.data.items():
                 data_lines.append(f"**{sym}:**")
@@ -229,9 +255,7 @@ class WeeklyPlanGenerator:
                 data_lines.append("")
             table_lines = header_lines + data_lines
             if has_cards:
-                sections.append("> [!info]- 详细数据：关键价位")
-                for line in table_lines:
-                    sections.append(f"> {line}")
+                sections.extend(_wrap_callout("详细数据：关键价位", table_lines))
             else:
                 sections.extend(table_lines)
 

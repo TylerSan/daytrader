@@ -56,23 +56,7 @@ if [ -f "$DATA_REPORT" ] && [ -f "$AI_OUTPUT" ]; then
     log "Final weekly report synced to Obsidian"
 fi
 
-# Step 3.5: Generate weekly info-card images (non-blocking, 120s timeout)
-log "Step 3.5: Generating weekly info-card images..."
-IMAGES_DIR="$EXPORT_DIR/images"
-mkdir -p "$IMAGES_DIR"
-
-if timeout 120 "$DAYTRADER" weekly cards --date "$TODAY" >> "$LOG_FILE" 2>&1; then
-    log "Weekly info cards generated successfully"
-else
-    log "WARNING: Weekly info card generation failed or timed out, continuing without cards"
-fi
-
-# Sync card images to Obsidian
-if [ -d "$IMAGES_DIR" ] && [ "$(ls -A "$IMAGES_DIR" 2>/dev/null)" ]; then
-    OBSIDIAN_IMAGES="$OBSIDIAN_WEEKLY/images"
-    mkdir -p "$OBSIDIAN_IMAGES"
-    cp "$IMAGES_DIR"/weekly-"$TODAY"-*.webp "$OBSIDIAN_IMAGES/" 2>/dev/null || true
-    log "Weekly card images synced to Obsidian"
-fi
+# Note: Info-card images are generated automatically by 'weekly analyze' in Step 1
+# and synced to Obsidian (including images/ subfolder) by the Python code.
 
 log "=== Completed ==="

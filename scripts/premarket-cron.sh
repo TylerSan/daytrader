@@ -58,24 +58,8 @@ if [ -f "$DATA_REPORT" ] && [ -f "$AI_OUTPUT" ]; then
     log "Final report synced to Obsidian"
 fi
 
-# Step 3.5: Generate info-card images (non-blocking, 120s timeout)
-log "Step 3.5: Generating info-card images..."
-IMAGES_DIR="$EXPORT_DIR/images"
-mkdir -p "$IMAGES_DIR"
-
-if timeout 120 "$DAYTRADER" pre cards --date "$TODAY" >> "$LOG_FILE" 2>&1; then
-    log "Info cards generated successfully"
-else
-    log "WARNING: Info card generation failed or timed out, continuing without cards"
-fi
-
-# Sync card images to Obsidian
-if [ -d "$IMAGES_DIR" ] && [ "$(ls -A "$IMAGES_DIR" 2>/dev/null)" ]; then
-    OBSIDIAN_IMAGES="$OBSIDIAN_DAILY/images"
-    mkdir -p "$OBSIDIAN_IMAGES"
-    cp "$IMAGES_DIR"/premarket-"$TODAY"-*.webp "$OBSIDIAN_IMAGES/" 2>/dev/null || true
-    log "Card images synced to Obsidian"
-fi
+# Note: Info-card images are generated automatically by 'pre analyze' in Step 1
+# and synced to Obsidian (including images/ subfolder) by the Python code.
 
 # Step 4: Generate Pine Scripts
 log "Step 4: Generating Pine Scripts..."

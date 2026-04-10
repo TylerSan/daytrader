@@ -8,6 +8,22 @@ from pathlib import Path
 from daytrader.premarket.collectors.base import CollectorResult
 
 
+def _wrap_callout(title: str, lines: list[str]) -> list[str]:
+    """Wrap content lines in an Obsidian collapsible callout block.
+
+    Returns lines including a trailing empty line (no prefix) to terminate
+    the callout, so the next callout can start cleanly.
+    """
+    wrapped = [f"> [!info]- {title}"]
+    for line in lines:
+        if line == "":
+            wrapped.append(">")
+        else:
+            wrapped.append(f"> {line}")
+    wrapped.append("")  # empty line terminates the callout
+    return wrapped
+
+
 class MarkdownRenderer:
     def __init__(self, output_dir: str = "data/exports") -> None:
         self._output_dir = Path(output_dir)
@@ -55,7 +71,7 @@ class MarkdownRenderer:
         futures = results.get("futures")
         if futures and futures.success:
             header_lines = [
-                "### 1.1 指数期货 & VIX\n",
+                "### 1.1 指数期货 & VIX",
                 "| 品种 | 现价 | 涨跌幅 | 前收 | 日高 | 日低 |",
                 "|------|------|--------|------|------|------|",
             ]
@@ -70,13 +86,11 @@ class MarkdownRenderer:
                 low = data.get("day_low", "—")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
                 data_lines.append(f"| {sym} | {price} | {change_str} | {prev} | {high} | {low} |")
-            table_lines = header_lines + data_lines + [""]
+            table_lines = header_lines + data_lines
             if has_cards:
-                sections.append("> [!info]- 详细数据：指数期货 & VIX")
-                for line in table_lines:
-                    sections.append(f"> {line}")
+                sections.extend(_wrap_callout("详细数据：指数期货 & VIX", table_lines))
             else:
-                sections.extend(table_lines)
+                sections.extend(table_lines + [""])
 
         # 1.2 隔夜走势
         if futures and futures.success:
@@ -87,7 +101,7 @@ class MarkdownRenderer:
             )
             if has_overnight:
                 header_lines = [
-                    "### 1.2 隔夜走势（Globex）\n",
+                    "### 1.2 隔夜走势（Globex）",
                     "| 品种 | 隔夜高 | 隔夜低 | 区间 | 亚洲高 | 亚洲低 | 欧洲高 | 欧洲低 |",
                     "|------|--------|--------|------|--------|--------|--------|--------|",
                 ]
@@ -103,13 +117,11 @@ class MarkdownRenderer:
                     eh = data.get("europe_high", "—")
                     el = data.get("europe_low", "—")
                     data_lines.append(f"| {sym} | {oh} | {ol} | {rng} | {ah} | {al} | {eh} | {el} |")
-                table_lines = header_lines + data_lines + [""]
+                table_lines = header_lines + data_lines
                 if has_cards:
-                    sections.append("> [!info]- 详细数据：隔夜走势")
-                    for line in table_lines:
-                        sections.append(f"> {line}")
+                    sections.extend(_wrap_callout("详细数据：隔夜走势", table_lines))
                 else:
-                    sections.extend(table_lines)
+                    sections.extend(table_lines + [""])
 
         # 1.3 板块强弱
         sectors = results.get("sectors")
@@ -120,7 +132,7 @@ class MarkdownRenderer:
                 reverse=True,
             )
             header_lines = [
-                "### 1.3 板块强弱\n",
+                "### 1.3 板块强弱",
                 "| ETF | 板块 | 涨跌幅 |",
                 "|-----|------|--------|",
             ]
@@ -130,13 +142,11 @@ class MarkdownRenderer:
                 change = data.get("change_pct")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
                 data_lines.append(f"| {sym} | {name} | {change_str} |")
-            table_lines = header_lines + data_lines + [""]
+            table_lines = header_lines + data_lines
             if has_cards:
-                sections.append("> [!info]- 详细数据：板块强弱")
-                for line in table_lines:
-                    sections.append(f"> {line}")
+                sections.extend(_wrap_callout("详细数据：板块强弱", table_lines))
             else:
-                sections.extend(table_lines)
+                sections.extend(table_lines + [""])
 
         # ═══════════════════════════════════════
         # Section 2: 消息面
@@ -169,13 +179,11 @@ class MarkdownRenderer:
                 data_lines.append(
                     f"| {m['symbol']} | {m['name']} | {m['price']} | {gap_str} | {m['vol_ratio']}x |"
                 )
-            table_lines = header_lines + data_lines + [""]
+            table_lines = header_lines + data_lines
             if has_cards:
-                sections.append("> [!info]- 详细数据：盘前异动")
-                for line in table_lines:
-                    sections.append(f"> {line}")
+                sections.extend(_wrap_callout("详细数据：盘前异动", table_lines))
             else:
-                sections.extend(table_lines)
+                sections.extend(table_lines + [""])
 
         # ═══════════════════════════════════════
         # Section 4: 关键价位
@@ -186,7 +194,7 @@ class MarkdownRenderer:
             sections.append("## 四、关键价位\n")
             for sym, lvls in levels.data.items():
                 header_lines = [
-                    f"### {sym}\n",
+                    f"### {sym}",
                     "| 价位类型 | 价格 |",
                     "|----------|------|",
                 ]
@@ -195,13 +203,13 @@ class MarkdownRenderer:
                     if price is not None:
                         label = level_name.replace("_", " ").title()
                         data_lines.append(f"| {label} | {price} |")
-                table_lines = header_lines + data_lines + [""]
+                table_lines = header_lines + data_lines
                 if has_cards:
-                    sections.append(f"> [!info]- 详细数据：{sym} 关键价位")
-                    for line in table_lines:
-                        sections.append(f"> {line}")
+                    sections.extend(
+                        _wrap_callout(f"详细数据：{sym} 关键价位", table_lines)
+                    )
                 else:
-                    sections.extend(table_lines)
+                    sections.extend(table_lines + [""])
 
         # ═══════════════════════════════════════
         # Section 5: AI 技术分析（如有）
@@ -234,5 +242,13 @@ class MarkdownRenderer:
             obsidian_path.mkdir(parents=True, exist_ok=True)
             obs_file = obsidian_path / f"premarket-{date.isoformat()}.md"
             obs_file.write_text(content)
+
+            # Also sync card images to Obsidian's images subfolder
+            if card_images:
+                obs_images_dir = obsidian_path / "images"
+                obs_images_dir.mkdir(parents=True, exist_ok=True)
+                for img in card_images:
+                    if img.exists():
+                        (obs_images_dir / img.name).write_bytes(img.read_bytes())
 
         return path
