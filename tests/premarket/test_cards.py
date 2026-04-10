@@ -76,93 +76,93 @@ def sample_results() -> dict[str, CollectorResult]:
     }
 
 
-def test_build_overview_prompt(sample_results):
+# --- Data extraction tests ---
+
+def test_extract_overview_data(sample_results):
     gen = CardGenerator(output_dir="/tmp/test-cards")
-    prompt = gen.build_overview_prompt(sample_results, date(2026, 4, 9))
-    assert "ES=F" in prompt
-    assert "5425.5" in prompt
-    assert "VIX" in prompt
-    assert "18.5" in prompt
+    data = gen._extract_overview_data(sample_results, date(2026, 4, 9))
+    assert data is not None
+    assert "instruments" in data
+    symbols = [i["symbol"] for i in data["instruments"]]
+    assert "ES=F" in symbols
+    # Check ES=F values
+    es = next(i for i in data["instruments"] if i["symbol"] == "ES=F")
+    assert es["price"] == 5425.50
+    # VIX is present
+    assert any("VIX" in i["symbol"] for i in data["instruments"])
+    vix = next(i for i in data["instruments"] if "VIX" in i["symbol"])
+    assert vix["price"] == 18.5
 
 
-def test_build_sectors_prompt(sample_results):
+def test_extract_sectors_data(sample_results):
     gen = CardGenerator(output_dir="/tmp/test-cards")
-    prompt = gen.build_sectors_prompt(sample_results)
-    assert "Technology" in prompt
-    assert "+1.20%" in prompt
-    assert "Financials" in prompt
+    data = gen._extract_sectors_data(sample_results)
+    assert data is not None
+    assert isinstance(data, list)
+    # Should be sorted descending by pct: XLK(1.2) before XLF(-0.3)
+    syms = [t[0] for t in data]
+    assert syms.index("XLK") < syms.index("XLF")
+    # Check names are present
+    names = [t[1] for t in data]
+    assert "Technology" in names
+    # Check pct values
+    pcts = {t[0]: t[2] for t in data}
+    assert pcts["XLK"] == 1.2
 
 
-def test_build_movers_prompt(sample_results):
+def test_extract_movers_data(sample_results):
     gen = CardGenerator(output_dir="/tmp/test-cards")
-    prompt = gen.build_movers_prompt(sample_results)
-    assert "PLTR" in prompt
-    assert "-7.96%" in prompt
-    assert "AMZN" in prompt
+    data = gen._extract_movers_data(sample_results)
+    assert data is not None
+    assert isinstance(data, list)
+    syms = [m["symbol"] for m in data]
+    assert "PLTR" in syms
+    pltr = next(m for m in data if m["symbol"] == "PLTR")
+    assert pltr["gap_pct"] == -7.96
+    assert "AMZN" in syms
 
 
-def test_build_levels_prompt(sample_results):
+def test_extract_levels_data(sample_results):
     gen = CardGenerator(output_dir="/tmp/test-cards")
-    prompt = gen.build_levels_prompt(sample_results)
-    assert "SPY" in prompt
-    assert "681.15" in prompt
-    assert "VWAP" in prompt or "vwap" in prompt.lower()
+    data = gen._extract_levels_data(sample_results)
+    assert data is not None
+    assert isinstance(data, dict)
+    assert "SPY" in data
+    spy = data["SPY"]
+    assert spy["prior_day_high"] == 681.15
+    assert "approx_vwap_5d" in spy
 
 
-def test_build_prompts_returns_empty_on_missing_data():
+def test_extract_returns_none_on_missing_data():
     gen = CardGenerator(output_dir="/tmp/test-cards")
-    empty = {}
-    assert gen.build_overview_prompt(empty, date(2026, 4, 9)) == ""
-    assert gen.build_sectors_prompt(empty) == ""
-    assert gen.build_movers_prompt(empty) == ""
-    assert gen.build_levels_prompt(empty) == ""
+    empty: dict = {}
+    assert gen._extract_overview_data(empty, date(2026, 4, 9)) is None
+    assert gen._extract_sectors_data(empty) is None
+    assert gen._extract_movers_data(empty) is None
+    assert gen._extract_levels_data(empty) is None
 
 
-# --- generate_card / generate_premarket_cards / generate_weekly_cards ---
+# --- Integration tests (real matplotlib rendering) ---
 
-from unittest.mock import patch, MagicMock
-import subprocess
-
-
-def test_generate_card_calls_claude_cli(sample_results, tmp_dir):
+def test_generate_premarket_cards_creates_files(sample_results, tmp_dir):
     gen = CardGenerator(output_dir=str(tmp_dir))
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = "Image generated successfully"
-
-    with patch("daytrader.premarket.renderers.cards.subprocess.run", return_value=mock_result) as mock_run:
-        path = gen.generate_card(
-            prompt="test prompt",
-            output_path=tmp_dir / "test.webp",
-        )
-        mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        assert "claude" in call_args[0][0][0] or "claude" in str(call_args)
+    paths = gen.generate_premarket_cards(sample_results, date(2026, 4, 9))
+    assert len(paths) == 4  # overview, sectors, movers, levels
+    for p in paths:
+        assert p.exists(), f"{p} does not exist"
+        assert p.stat().st_size > 1000, f"{p} is suspiciously small"
 
 
-def test_generate_card_returns_none_on_failure(tmp_dir):
+def test_generate_premarket_cards_skips_missing(tmp_dir):
     gen = CardGenerator(output_dir=str(tmp_dir))
-    with patch("daytrader.premarket.renderers.cards.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=120)):
-        path = gen.generate_card(
-            prompt="test prompt",
-            output_path=tmp_dir / "test.webp",
-        )
-        assert path is None
+    paths = gen.generate_premarket_cards({}, date(2026, 4, 9))
+    assert paths == []
 
 
-def test_generate_all_premarket(sample_results, tmp_dir):
+def test_generate_weekly_cards_creates_files(sample_results, tmp_dir):
     gen = CardGenerator(output_dir=str(tmp_dir))
-
-    with patch.object(gen, "generate_card", return_value=tmp_dir / "fake.webp") as mock_gen:
-        paths = gen.generate_premarket_cards(sample_results, date(2026, 4, 9))
-        assert mock_gen.call_count == 4  # overview, sectors, movers, levels
-
-
-def test_generate_all_premarket_skips_missing_data(tmp_dir):
-    gen = CardGenerator(output_dir=str(tmp_dir))
-    empty_results = {}
-
-    with patch.object(gen, "generate_card") as mock_gen:
-        paths = gen.generate_premarket_cards(empty_results, date(2026, 4, 9))
-        assert mock_gen.call_count == 0
-        assert paths == []
+    paths = gen.generate_weekly_cards(sample_results, date(2026, 4, 9))
+    assert len(paths) >= 2  # overview, levels, sectors
+    for p in paths:
+        assert p.exists(), f"{p} does not exist"
+        assert p.stat().st_size > 1000, f"{p} is suspiciously small"
