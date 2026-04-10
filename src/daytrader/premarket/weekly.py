@@ -135,8 +135,14 @@ class WeeklyPlanGenerator:
 
         return path
 
-    def _render_data(self, results: dict[str, CollectorResult], week_start: date) -> str:
+    def _render_data(
+        self,
+        results: dict[str, CollectorResult],
+        week_start: date,
+        card_images: list[Path] | None = None,
+    ) -> str:
         now = datetime.now()
+        has_cards = bool(card_images)
         sections = [
             "---",
             f"date: {week_start.isoformat()}",
@@ -148,14 +154,26 @@ class WeeklyPlanGenerator:
             f"*生成时间: {now.strftime('%Y-%m-%d %H:%M')} UTC*\n",
         ]
 
+        # 数据速览 (card image snapshot section)
+        if has_cards:
+            sections.append("---")
+            sections.append("## 数据速览\n")
+            for img in card_images:
+                label = img.stem.split("-", 4)[-1] if "-" in img.stem else img.stem
+                sections.append(f"![{label}](images/{img.name})")
+            sections.append("")
+
         sections.append("---")
         sections.append("## 市场数据概览\n")
 
         futures = results.get("futures")
         if futures and futures.success:
-            sections.append("### 期货 & VIX\n")
-            sections.append("| 品种 | 现价 | 涨跌幅 | 前收 |")
-            sections.append("|------|------|--------|------|")
+            header_lines = [
+                "### 期货 & VIX\n",
+                "| 品种 | 现价 | 涨跌幅 | 前收 |",
+                "|------|------|--------|------|",
+            ]
+            data_lines: list[str] = []
             for sym, data in futures.data.items():
                 if not isinstance(data, dict):
                     continue
@@ -163,8 +181,14 @@ class WeeklyPlanGenerator:
                 change = data.get("change_pct")
                 prev = data.get("prev_close", "—")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
-                sections.append(f"| {sym} | {price} | {change_str} | {prev} |")
-            sections.append("")
+                data_lines.append(f"| {sym} | {price} | {change_str} | {prev} |")
+            table_lines = header_lines + data_lines + [""]
+            if has_cards:
+                sections.append("> [!info]- 详细数据：期货 & VIX")
+                for line in table_lines:
+                    sections.append(f"> {line}")
+            else:
+                sections.extend(table_lines)
 
         sectors = results.get("sectors")
         if sectors and sectors.success:
@@ -173,26 +197,43 @@ class WeeklyPlanGenerator:
                 key=lambda x: x[1].get("change_pct") or 0,
                 reverse=True,
             )
-            sections.append("### 板块强弱\n")
-            sections.append("| ETF | 板块 | 涨跌幅 |")
-            sections.append("|-----|------|--------|")
+            header_lines = [
+                "### 板块强弱\n",
+                "| ETF | 板块 | 涨跌幅 |",
+                "|-----|------|--------|",
+            ]
+            data_lines = []
             for sym, data in sorted_sectors:
                 name = data.get("name", sym)
                 change = data.get("change_pct")
                 change_str = f"{change:+.2f}%" if isinstance(change, (int, float)) else "—"
-                sections.append(f"| {sym} | {name} | {change_str} |")
-            sections.append("")
+                data_lines.append(f"| {sym} | {name} | {change_str} |")
+            table_lines = header_lines + data_lines + [""]
+            if has_cards:
+                sections.append("> [!info]- 详细数据：板块强弱")
+                for line in table_lines:
+                    sections.append(f"> {line}")
+            else:
+                sections.extend(table_lines)
 
         levels = results.get("levels")
         if levels and levels.success:
-            sections.append("### 关键价位\n")
+            header_lines = ["### 关键价位\n"]
+            data_lines = []
             for sym, lvls in levels.data.items():
-                sections.append(f"**{sym}:**")
+                data_lines.append(f"**{sym}:**")
                 for name, price in lvls.items():
                     if price is not None:
                         label = name.replace("_", " ").title()
-                        sections.append(f"- {label}: {price}")
-                sections.append("")
+                        data_lines.append(f"- {label}: {price}")
+                data_lines.append("")
+            table_lines = header_lines + data_lines
+            if has_cards:
+                sections.append("> [!info]- 详细数据：关键价位")
+                for line in table_lines:
+                    sections.append(f"> {line}")
+            else:
+                sections.extend(table_lines)
 
         sections.append("---")
         sections.append("*运行 `daytrader weekly analyze` 或发送 \"执行周计划AI分析\" 获取完整智能分析*\n")

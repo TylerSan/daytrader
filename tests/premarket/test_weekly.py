@@ -1,11 +1,72 @@
 # tests/premarket/test_weekly.py
 from datetime import datetime, date, timezone
-from unittest.mock import AsyncMock
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from daytrader.premarket.collectors.base import CollectorResult, MarketDataCollector
 from daytrader.premarket.weekly import WeeklyPlanGenerator
+
+
+@pytest.fixture
+def mock_results():
+    return {
+        "futures": CollectorResult(
+            collector_name="futures",
+            timestamp=datetime(2026, 4, 6, 18, 0, tzinfo=timezone.utc),
+            data={"ES=F": {"price": 5425.50, "change_pct": 0.35, "prev_close": 5400.0}},
+            success=True,
+        ),
+        "sectors": CollectorResult(
+            collector_name="sectors",
+            timestamp=datetime(2026, 4, 6, 18, 0, tzinfo=timezone.utc),
+            data={"XLK": {"name": "Technology", "change_pct": 1.2}},
+            success=True,
+        ),
+        "levels": CollectorResult(
+            collector_name="levels",
+            timestamp=datetime(2026, 4, 6, 18, 0, tzinfo=timezone.utc),
+            data={
+                "SPY": {
+                    "weekly_high": 543.0,
+                    "weekly_low": 536.0,
+                    "prior_day_close": 540.0,
+                },
+            },
+            success=True,
+        ),
+    }
+
+
+@pytest.fixture
+def sample_results():
+    return {
+        "futures": CollectorResult(
+            collector_name="futures",
+            timestamp=datetime(2026, 4, 9, 18, 0, tzinfo=timezone.utc),
+            data={"ES=F": {"price": 5425.50, "change_pct": 0.35, "prev_close": 5400.0}},
+            success=True,
+        ),
+        "sectors": CollectorResult(
+            collector_name="sectors",
+            timestamp=datetime(2026, 4, 9, 18, 0, tzinfo=timezone.utc),
+            data={"XLK": {"name": "Technology", "change_pct": 1.2}},
+            success=True,
+        ),
+        "levels": CollectorResult(
+            collector_name="levels",
+            timestamp=datetime(2026, 4, 9, 18, 0, tzinfo=timezone.utc),
+            data={
+                "SPY": {
+                    "weekly_high": 543.0,
+                    "weekly_low": 536.0,
+                    "prior_day_close": 540.0,
+                },
+            },
+            success=True,
+        ),
+    }
 
 
 @pytest.fixture
@@ -60,3 +121,23 @@ async def test_weekly_plan_saves_file(tmp_dir, mock_results):
     path = await generator.generate_and_save(week_start=date(2026, 4, 6))
     assert path.exists()
     assert "weekly" in path.name
+
+
+def test_weekly_render_with_cards_shows_snapshot(sample_results):
+    from daytrader.premarket.weekly import WeeklyPlanGenerator
+    collector = MagicMock()
+    gen = WeeklyPlanGenerator(collector=collector, output_dir="/tmp/test")
+    card_images = [Path("data/exports/images/weekly-2026-04-09-overview.webp")]
+    report = gen._render_data(sample_results, date(2026, 4, 9), card_images=card_images)
+    assert "数据速览" in report
+    assert "weekly-2026-04-09-overview.webp" in report
+    assert "> [!info]- 详细数据" in report
+
+
+def test_weekly_render_without_cards_no_folding(sample_results):
+    from daytrader.premarket.weekly import WeeklyPlanGenerator
+    collector = MagicMock()
+    gen = WeeklyPlanGenerator(collector=collector, output_dir="/tmp/test")
+    report = gen._render_data(sample_results, date(2026, 4, 9))
+    assert "> [!info]-" not in report
+    assert "数据速览" not in report
