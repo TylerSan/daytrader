@@ -63,9 +63,24 @@ class PremarketChecklist:
             if title in translations:
                 item["title_zh"] = translations[title]
 
+    def _check_data_quality(self, results: dict[str, CollectorResult]) -> None:
+        """Raise SystemExit if all critical data collectors returned empty/failed."""
+        critical = ["futures", "sectors", "levels"]
+        failures = []
+        for name in critical:
+            r = results.get(name)
+            if not r or not r.success or not r.data:
+                failures.append(name)
+        if len(failures) == len(critical):
+            raise SystemExit(
+                f"All critical data collectors failed ({', '.join(failures)}). "
+                "Cannot generate a meaningful report. Check network access."
+            )
+
     async def run(self, target_date: date | None = None) -> str:
         target_date = target_date or date.today()
         results = await self._collector.collect_all()
+        self._check_data_quality(results)
         card_images = self._generate_cards(results, target_date)
 
         report = ""
@@ -91,6 +106,7 @@ class PremarketChecklist:
         """
         target_date = target_date or date.today()
         results = await self._collector.collect_all()
+        self._check_data_quality(results)
         card_images = self._generate_cards(results, target_date)
 
         # Translate news headlines to Chinese (best-effort)

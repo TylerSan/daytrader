@@ -1,0 +1,10 @@
+//@version=5
+indicator("DayTrader Levels — SPY (2026-04-14)", overlay=true)
+
+hline(686.295, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
+hline(676.58, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
+hline(679.46, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
+hline(688.01, "PREMARKET PRICE", color.orange, hline.style_dotted, 1)
+hline(675.19, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(686.3, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
+hline(651.06, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)

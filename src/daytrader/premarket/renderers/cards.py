@@ -27,8 +27,15 @@ TEXT_GRAY = "#86868B"
 FIGSIZE = (8, 8)
 DPI = 100
 
-# Chinese font support
-matplotlib.rcParams["font.family"] = ["Hiragino Sans GB", "Arial Unicode MS", "sans-serif"]
+# Chinese font support — macOS uses Hiragino, Linux uses Noto Sans CJK
+matplotlib.rcParams["font.family"] = [
+    "Hiragino Sans GB",       # macOS
+    "Noto Sans CJK SC",       # Linux (apt install fonts-noto-cjk)
+    "Noto Sans SC",            # Linux alternate name
+    "WenQuanYi Micro Hei",    # Linux fallback
+    "Arial Unicode MS",        # Windows/macOS fallback
+    "sans-serif",
+]
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 
