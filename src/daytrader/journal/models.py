@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import date as date_type, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 ALLOWED_SYMBOLS = {"MES", "MNQ", "MGC"}
@@ -38,15 +38,7 @@ class ChecklistItems(BaseModel):
     item_past_cooloff: bool
 
     def all_passed(self) -> bool:
-        return all(
-            [
-                self.item_stop_at_broker,
-                self.item_within_r_limit,
-                self.item_matches_locked_setup,
-                self.item_within_daily_r,
-                self.item_past_cooloff,
-            ]
-        )
+        return all(self.model_dump().values())
 
     def failed_items(self) -> list[str]:
         return [k for k, v in self.model_dump().items() if v is False]
@@ -98,14 +90,20 @@ class JournalTrade(BaseModel):
             return None
         r = self.risk()
         if r == 0:
-            return Decimal("0")
+            raise ValueError(
+                "stop_price equals entry_price — risk is zero; "
+                "trade data is invalid"
+            )
         return p / r
 
-    def model_post_init(self, _ctx) -> None:
-        if self.symbol not in ALLOWED_SYMBOLS:
+    @field_validator("symbol")
+    @classmethod
+    def _symbol_allowed(cls, v: str) -> str:
+        if v not in ALLOWED_SYMBOLS:
             raise ValueError(
-                f"symbol {self.symbol!r} not in {sorted(ALLOWED_SYMBOLS)}"
+                f"symbol {v!r} not in {sorted(ALLOWED_SYMBOLS)}"
             )
+        return v
 
 
 class DryRun(BaseModel):
@@ -126,11 +124,14 @@ class DryRun(BaseModel):
     hypothetical_r_multiple: Optional[Decimal] = None
     notes: Optional[str] = None
 
-    def model_post_init(self, _ctx) -> None:
-        if self.symbol not in ALLOWED_SYMBOLS:
+    @field_validator("symbol")
+    @classmethod
+    def _symbol_allowed(cls, v: str) -> str:
+        if v not in ALLOWED_SYMBOLS:
             raise ValueError(
-                f"symbol {self.symbol!r} not in {sorted(ALLOWED_SYMBOLS)}"
+                f"symbol {v!r} not in {sorted(ALLOWED_SYMBOLS)}"
             )
+        return v
 
 
 class CircuitState(BaseModel):
@@ -157,7 +158,7 @@ class Contract(BaseModel):
     lock_in_min_trades: int = 30
     backup_setup_name: Optional[str] = None
     backup_setup_file: Optional[str] = None
-    backup_setup_status: str = "benched"  # 'benched' | 'active'
+    backup_setup_status: Literal["benched", "active"] = "benched"
 
 
 class SetupVerdict(BaseModel):

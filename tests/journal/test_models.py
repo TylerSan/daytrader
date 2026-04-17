@@ -128,6 +128,22 @@ class TestJournalTrade:
         )
         assert t.r_multiple() is None
 
+    def test_r_multiple_zero_risk_raises(self):
+        """stop_price == entry_price is a data integrity violation; must raise."""
+        t = JournalTrade(
+            id="t01", checklist_id="c01", date="2026-04-20",
+            symbol="MES", direction=TradeSide.LONG, setup_type="orb",
+            entry_time=_dt("2026-04-20T13:35:00"),
+            entry_price=Decimal("5000"),
+            stop_price=Decimal("5000"),  # <-- zero risk
+            target_price=Decimal("5010"),
+            size=1,
+            exit_time=_dt("2026-04-20T14:00:00"),
+            exit_price=Decimal("5005"),
+        )
+        with pytest.raises(ValueError, match="risk is zero"):
+            t.r_multiple()
+
 
 class TestCircuitState:
     def test_default_not_locked(self):
@@ -157,7 +173,9 @@ class TestContract:
 
 
 class TestSetupVerdict:
-    def test_pass_requires_both_conditions(self):
+    def test_fields_accept_valid_pass_values(self):
+        """Model accepts whatever `passed` value caller provides;
+        enforcement of n>=30 && avg_r>=0 lives in the runner (Task 12)."""
         v = SetupVerdict(
             setup_name="orb", setup_version="v1",
             run_date="2026-04-20", symbol="MES",
@@ -169,8 +187,8 @@ class TestSetupVerdict:
         )
         assert v.passed is True
 
-    def test_failed_when_low_sample(self):
-        # n<30 should be marked failed regardless of avg_r
+    def test_fields_accept_valid_fail_values(self):
+        # Model accepts passed=False; rule enforcement lives in runner.
         v = SetupVerdict(
             setup_name="orb", setup_version="v1",
             run_date="2026-04-20", symbol="MES",
@@ -200,3 +218,52 @@ class TestDryRun:
     def test_outcome_enum(self):
         for val in ("target_hit", "stop_hit", "rule_exit", "no_trigger"):
             DryRunOutcome(val)  # should parse cleanly
+
+    def test_symbol_whitelist(self):
+        with pytest.raises(ValidationError):
+            DryRun(
+                id="d01", checklist_id="c01", date="2026-04-20",
+                symbol="SPY",  # not in whitelist
+                direction=TradeSide.LONG, setup_type="orb",
+                identified_time=_dt("2026-04-20T13:35:00"),
+                hypothetical_entry=Decimal("5000"),
+                hypothetical_stop=Decimal("4995"),
+                hypothetical_target=Decimal("5010"),
+                hypothetical_size=1,
+            )
+
+
+class TestChecklist:
+    def test_construct_with_passed_items(self):
+        from daytrader.journal.models import Checklist
+        items = ChecklistItems(
+            item_stop_at_broker=True, item_within_r_limit=True,
+            item_matches_locked_setup=True, item_within_daily_r=True,
+            item_past_cooloff=True,
+        )
+        c = Checklist(
+            id="c01",
+            timestamp=_dt("2026-04-20T13:35:00"),
+            mode=TradeMode.REAL,
+            contract_version=1,
+            items=items,
+            passed=items.all_passed(),
+        )
+        assert c.passed is True
+        assert c.failure_reason is None
+
+
+class TestContractBackupStatus:
+    def test_invalid_backup_status_rejected(self):
+        with pytest.raises(ValidationError):
+            Contract(
+                version=1,
+                signed_date="2026-04-20",
+                active=True,
+                r_unit_usd=Decimal("50"),
+                daily_loss_limit_r=3,
+                daily_loss_warning_r=2,
+                max_trades_per_day=5,
+                stop_cooloff_minutes=30,
+                backup_setup_status="Active",  # typo — only 'active'/'benched' allowed
+            )
