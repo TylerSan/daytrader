@@ -55,14 +55,18 @@ class BacktestConfig(BaseModel):
     default_config: str = "stacked_imbalance.yaml"
 
 
+class JournalObsidianConfig(BaseModel):
+    trades_folder: str = "DayTrader/Trades"
+    dry_runs_folder: str = "DayTrader/DryRuns"
+    checklists_folder: str = "DayTrader/Daily"
+
+
 class JournalConfig(BaseModel):
     db_path: str = "data/db/journal.db"
     contract_path: str = "docs/trading/Contract.md"
     setups_dir: str = "docs/trading/setups"
-    obsidian_trades_folder: str = "DayTrader/Trades"
-    obsidian_dry_runs_folder: str = "DayTrader/DryRuns"
-    obsidian_checklists_folder: str = "DayTrader/Daily"
     data_cache_dir: str = "data/cache/ohlcv"
+    obsidian: JournalObsidianConfig = JournalObsidianConfig()
 
 
 class DayTraderConfig(BaseModel):

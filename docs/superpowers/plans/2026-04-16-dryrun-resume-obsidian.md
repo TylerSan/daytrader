@@ -573,9 +573,9 @@ def _load_cfg_repo_writer():
         vault = Path(cfg.obsidian.vault_path).expanduser()
         writer = ObsidianWriter(
             vault_root=vault,
-            trades_folder=cfg.journal.obsidian_trades_folder,
-            dry_runs_folder=cfg.journal.obsidian_dry_runs_folder,
-            checklists_folder=cfg.journal.obsidian_checklists_folder,
+            trades_folder=cfg.journal.obsidian.trades_folder,
+            dry_runs_folder=cfg.journal.obsidian.dry_runs_folder,
+            checklists_folder=cfg.journal.obsidian.checklists_folder,
         )
     return cfg, repo, writer
 ```

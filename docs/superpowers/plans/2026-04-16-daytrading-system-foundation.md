@@ -131,14 +131,18 @@ touch docs/trading/setups/.gitkeep
 Edit `src/daytrader/core/config.py`, add new class BEFORE `class DayTraderConfig`:
 
 ```python
+class JournalObsidianConfig(BaseModel):
+    trades_folder: str = "DayTrader/Trades"
+    dry_runs_folder: str = "DayTrader/DryRuns"
+    checklists_folder: str = "DayTrader/Daily"
+
+
 class JournalConfig(BaseModel):
     db_path: str = "data/db/journal.db"
     contract_path: str = "docs/trading/Contract.md"
     setups_dir: str = "docs/trading/setups"
-    obsidian_trades_folder: str = "DayTrader/Trades"
-    obsidian_dry_runs_folder: str = "DayTrader/DryRuns"
-    obsidian_checklists_folder: str = "DayTrader/Daily"
     data_cache_dir: str = "data/cache/ohlcv"
+    obsidian: JournalObsidianConfig = JournalObsidianConfig()
 ```
 
 Add field to `DayTraderConfig`:
@@ -162,10 +166,11 @@ journal:
   db_path: data/db/journal.db
   contract_path: docs/trading/Contract.md
   setups_dir: docs/trading/setups
-  obsidian_trades_folder: DayTrader/Trades
-  obsidian_dry_runs_folder: DayTrader/DryRuns
-  obsidian_checklists_folder: DayTrader/Daily
   data_cache_dir: data/cache/ohlcv
+  obsidian:
+    trades_folder: DayTrader/Trades
+    dry_runs_folder: DayTrader/DryRuns
+    checklists_folder: DayTrader/Daily
 ```
 
 - [ ] **Step 4: Create Contract.md.template**
