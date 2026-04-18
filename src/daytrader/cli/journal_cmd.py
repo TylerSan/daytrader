@@ -17,12 +17,14 @@ from daytrader.journal.repository import JournalRepository
 from daytrader.journal.trades import PostTradeInput, PostTradeService
 
 
-def _load_cfg_and_repo():
-    """Load config + initialize repository.
+def _load_cfg_repo_writer():
+    """Load config + initialize repository + optional ObsidianWriter.
 
     Also sync active contract from Contract.md if on-disk contract is newer
     than the DB active contract.  The contract_path guard (`if exists`) means
     tests that run without a real Contract.md on disk won't break.
+
+    Returns (cfg, repo, writer) where writer is None if Obsidian is disabled.
     """
     project_root = Path(__file__).resolve().parents[3]
     cfg = load_config(
@@ -44,6 +46,23 @@ def _load_cfg_and_repo():
         except Exception as e:
             click.echo(f"contract parse warning: {e}", err=True)
 
+    from daytrader.journal.obsidian import ObsidianWriter
+    writer = None
+    if cfg.obsidian.enabled:
+        vault = Path(cfg.obsidian.vault_path).expanduser()
+        writer = ObsidianWriter(
+            vault_root=vault,
+            trades_folder=cfg.journal.obsidian.trades_folder,
+            dry_runs_folder=cfg.journal.obsidian.dry_runs_folder,
+            checklists_folder=cfg.journal.obsidian.checklists_folder,
+        )
+
+    return cfg, repo, writer
+
+
+def _load_cfg_and_repo():
+    """Alias that drops the writer — used by commands that don't modify state."""
+    cfg, repo, _ = _load_cfg_repo_writer()
     return cfg, repo
 
 
@@ -63,7 +82,7 @@ def _load_cfg_and_repo():
 def pre_trade(symbol, direction, setup_type, entry_price, stop_price,
               target_price, size, stop_at_broker, dry_run):
     """Run pre-trade checklist. Creates trade record only if all items pass."""
-    _cfg, repo = _load_cfg_and_repo()
+    _cfg, repo, writer = _load_cfg_repo_writer()
     circuit = CircuitService(repo)
     svc = ChecklistService(repo, circuit)
 
@@ -88,6 +107,15 @@ def pre_trade(symbol, direction, setup_type, entry_price, stop_price,
                 "  Now place the order at your broker with the exact stop. "
                 "Call `daytrader journal post-trade` after exit."
             )
+        if writer:
+            if result.trade_id:
+                trade = repo.get_trade(result.trade_id)
+                if trade:
+                    writer.write_trade(trade)
+            if result.checklist_id:
+                c = repo.get_checklist(result.checklist_id)
+                if c:
+                    writer.write_checklist(c)
     else:
         click.echo(f"BLOCKED  reason={result.failure_reason}")
         if result.failed_items:
@@ -108,7 +136,7 @@ def post_trade(trade_id, exit_price, was_stop, notes):
             "--notes is required (one sentence, written immediately after exit)"
         )
 
-    _cfg, repo = _load_cfg_and_repo()
+    _cfg, repo, writer = _load_cfg_repo_writer()
     svc = PostTradeService(repo, CircuitService(repo))
     try:
         svc.close(PostTradeInput(
@@ -126,6 +154,8 @@ def post_trade(trade_id, exit_price, was_stop, notes):
     state = repo.get_circuit_state(trade.date)
     if state.no_trade_flag:
         click.echo(f"Circuit LOCKED for {state.date}: {state.lock_reason}")
+    if writer and trade:
+        writer.write_trade(trade)
 
 
 @click.group("circuit")
@@ -175,7 +205,7 @@ def dry_run_start(checklist_id, symbol, direction, setup_type,
     from daytrader.journal.dry_run import DryRunService, DryRunStartInput
     from daytrader.journal.models import TradeSide
 
-    _cfg, repo = _load_cfg_and_repo()
+    _cfg, repo, writer = _load_cfg_repo_writer()
     svc = DryRunService(repo)
     try:
         result = svc.start(
@@ -190,6 +220,13 @@ def dry_run_start(checklist_id, symbol, direction, setup_type,
     except ValueError as e:
         raise click.UsageError(str(e))
     click.echo(f"dry_run_id={result.dry_run_id}")
+    if writer:
+        dr = next(
+            (d for d in repo.list_dry_runs() if d.id == result.dry_run_id),
+            None,
+        )
+        if dr:
+            writer.write_dry_run(dr)
 
 
 @dry_run_group.command("end")
@@ -203,7 +240,7 @@ def dry_run_end(dry_run_id, outcome, outcome_price, notes):
     from daytrader.journal.dry_run import DryRunService, DryRunEndInput
     from daytrader.journal.models import DryRunOutcome
 
-    _cfg, repo = _load_cfg_and_repo()
+    _cfg, repo, writer = _load_cfg_repo_writer()
     svc = DryRunService(repo)
     try:
         svc.end(DryRunEndInput(
@@ -216,6 +253,13 @@ def dry_run_end(dry_run_id, outcome, outcome_price, notes):
     except ValueError as e:
         raise click.UsageError(str(e))
     click.echo(f"closed dry-run {dry_run_id}")
+    if writer:
+        dr = next(
+            (d for d in repo.list_dry_runs() if d.id == dry_run_id),
+            None,
+        )
+        if dr:
+            writer.write_dry_run(dr)
 
 
 @sanity_group.command("run")
