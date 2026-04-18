@@ -289,6 +289,22 @@ def resume_gate_check():
         raise click.exceptions.Exit(1)
 
 
+@click.command("audit")
+def audit_cmd():
+    """Run integrity audit on journal DB. Exits 1 if any issue found."""
+    from daytrader.journal.auditor import Auditor
+    _cfg, repo, _ = _load_cfg_repo_writer()
+    audit = Auditor(repo)
+    issues = audit.run_all()
+    if not issues:
+        click.echo("audit clean: no issues")
+        return
+    click.echo(f"{len(issues)} issue(s) found:")
+    for i in issues:
+        click.echo(f"  [{i.kind}] {i.detail}")
+    raise click.exceptions.Exit(1)
+
+
 @sanity_group.command("run")
 @click.argument("setup_file", type=click.Path(exists=True, path_type=Path))
 @click.option("--symbol", multiple=True, default=None,
