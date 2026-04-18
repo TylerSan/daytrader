@@ -148,3 +148,49 @@ def circuit_status():
         click.echo(f"Lock reason: {state.lock_reason}")
     if state.last_stop_time:
         click.echo(f"Last stop: {state.last_stop_time}")
+
+
+@click.group("sanity")
+def sanity_group():
+    """Sanity-floor backtest commands."""
+
+
+@sanity_group.command("run")
+@click.argument("setup_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--symbol", multiple=True, default=None,
+              help="Override symbols (otherwise use setup's list)")
+@click.option("--window-days", default=90, type=int)
+def sanity_run(setup_file: Path, symbol: tuple[str, ...], window_days: int):
+    """Run sanity-floor backtest on a setup YAML."""
+    from datetime import date as _d
+    from daytrader.journal.sanity_floor.data_loader import HistoricalDataLoader
+    from daytrader.journal.sanity_floor.runner import (
+        RunnerConfig, run_setup_for_symbol,
+    )
+    from daytrader.journal.sanity_floor.setup_yaml import load_setup_yaml
+
+    cfg, repo = _load_cfg_and_repo()
+    setup = load_setup_yaml(setup_file)
+    loader = HistoricalDataLoader(cache_dir=cfg.journal.data_cache_dir)
+    run_date = _d.today()
+    symbols = list(symbol) if symbol else setup.symbols
+    rconf = RunnerConfig(data_window_days=window_days)
+    click.echo(
+        "WARNING: Sanity-Floor Backtest -- this is NOT a 'good' backtest.\n"
+        "         It only rejects obviously broken setups.\n"
+        "         Passing does NOT mean the setup has edge.\n"
+    )
+    for sym in symbols:
+        try:
+            v = run_setup_for_symbol(
+                setup=setup, symbol=sym, loader=loader,
+                repo=repo, run_date=run_date, config=rconf,
+            )
+            status = "PASSED" if v.passed else "FAILED"
+            click.echo(
+                f"[{status}] {setup.name}/{sym}: "
+                f"n={v.n_samples} win_rate={v.win_rate:.2%} "
+                f"avg_r={v.avg_r:.3f}"
+            )
+        except Exception as e:
+            click.echo(f"[ERROR] {setup.name}/{sym}: {e}", err=True)

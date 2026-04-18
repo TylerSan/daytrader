@@ -103,8 +103,9 @@ def journal() -> None:
     """Trade journal & import."""
 
 
-from daytrader.cli.journal_cmd import pre_trade, post_trade, circuit_group  # noqa: E402
+from daytrader.cli.journal_cmd import pre_trade, post_trade, circuit_group, sanity_group  # noqa: E402
 
 journal.add_command(pre_trade)
 journal.add_command(post_trade)
 journal.add_command(circuit_group)
+journal.add_command(sanity_group)
