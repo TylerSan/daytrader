@@ -212,7 +212,7 @@ class JournalRepository:
                 passed, failure_reason)
                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (c.id, c.timestamp.isoformat(),
-             c.mode.value if hasattr(c.mode, "value") else c.mode,
+             c.mode.value,
              c.contract_version,
              _to_int(c.items.item_stop_at_broker),
              _to_int(c.items.item_within_r_limit),
@@ -272,15 +272,22 @@ class JournalRepository:
         pnl_usd: Decimal, notes: Optional[str] = None,
         violations: Optional[list[str]] = None,
     ) -> None:
+        """Close an open trade. Raises RuntimeError if the trade does not
+        exist or has already been closed — guards against double-close that
+        would silently corrupt P&L."""
         conn = self._get_conn()
-        conn.execute(
+        cursor = conn.execute(
             """UPDATE journal_trades
                SET exit_time=?, exit_price=?, pnl_usd=?,
                    notes=COALESCE(?, notes), violations=?
-               WHERE id=?""",
+               WHERE id=? AND exit_time IS NULL""",
             (exit_time.isoformat(), str(exit_price), str(pnl_usd),
              notes, json.dumps(violations or []), trade_id),
         )
+        if cursor.rowcount == 0:
+            raise RuntimeError(
+                f"close_trade: trade {trade_id!r} not found or already closed"
+            )
         conn.commit()
 
     def get_trade(self, tid: str) -> Optional[JournalTrade]:
@@ -307,13 +314,31 @@ class JournalRepository:
             violations=json.loads(row["violations"] or "[]"),
         )
 
+    def _row_to_trade(self, row: sqlite3.Row) -> JournalTrade:
+        return JournalTrade(
+            id=row["id"], checklist_id=row["checklist_id"],
+            date=date_type.fromisoformat(row["date"]),
+            symbol=row["symbol"], direction=TradeSide(row["direction"]),
+            setup_type=row["setup_type"],
+            entry_time=datetime.fromisoformat(row["entry_time"]),
+            entry_price=Decimal(row["entry_price"]),
+            stop_price=Decimal(row["stop_price"]),
+            target_price=Decimal(row["target_price"]),
+            size=row["size"],
+            exit_time=datetime.fromisoformat(row["exit_time"]) if row["exit_time"] else None,
+            exit_price=Decimal(row["exit_price"]) if row["exit_price"] else None,
+            pnl_usd=Decimal(row["pnl_usd"]) if row["pnl_usd"] else None,
+            notes=row["notes"],
+            violations=json.loads(row["violations"] or "[]"),
+        )
+
     def list_trades_on_date(self, d: date_type) -> list[JournalTrade]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT id FROM journal_trades WHERE date = ? ORDER BY entry_time",
+            "SELECT * FROM journal_trades WHERE date = ? ORDER BY entry_time",
             (d.isoformat(),),
         ).fetchall()
-        return [self.get_trade(r["id"]) for r in rows]
+        return [self._row_to_trade(r) for r in rows]
 
     # --- Dry runs ---
 
@@ -345,24 +370,42 @@ class JournalRepository:
         outcome_time: datetime, outcome_price: Decimal,
         r_multiple: Decimal, notes: Optional[str] = None,
     ) -> None:
+        """Close an open dry-run. Raises RuntimeError if the dry-run does
+        not exist or has already been closed."""
         conn = self._get_conn()
-        conn.execute(
+        cursor = conn.execute(
             """UPDATE journal_dry_runs
                SET outcome=?, outcome_time=?, outcome_price=?,
                    hypothetical_r_multiple=?, notes=COALESCE(?, notes)
-               WHERE id=?""",
+               WHERE id=? AND outcome IS NULL""",
             (outcome.value, outcome_time.isoformat(), str(outcome_price),
              str(r_multiple), notes, dry_run_id),
         )
+        if cursor.rowcount == 0:
+            raise RuntimeError(
+                f"close_dry_run: dry-run {dry_run_id!r} not found or "
+                "already closed"
+            )
         conn.commit()
 
-    def list_dry_runs(self, only_with_outcome: bool = False) -> list[DryRun]:
+    def list_dry_runs(
+        self,
+        only_with_outcome: bool = False,
+        on_date: Optional[date_type] = None,
+    ) -> list[DryRun]:
         conn = self._get_conn()
         q = "SELECT * FROM journal_dry_runs"
+        where_clauses: list[str] = []
+        params: list = []
         if only_with_outcome:
-            q += " WHERE outcome IS NOT NULL"
+            where_clauses.append("outcome IS NOT NULL")
+        if on_date is not None:
+            where_clauses.append("date = ?")
+            params.append(on_date.isoformat())
+        if where_clauses:
+            q += " WHERE " + " AND ".join(where_clauses)
         q += " ORDER BY identified_time"
-        rows = conn.execute(q).fetchall()
+        rows = conn.execute(q, params).fetchall()
         out = []
         for row in rows:
             out.append(DryRun(

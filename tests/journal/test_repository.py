@@ -116,6 +116,70 @@ def test_post_trade_update(repo: JournalRepository):
     assert got.notes == "target hit"
 
 
+def test_close_trade_raises_on_nonexistent(repo: JournalRepository):
+    with pytest.raises(RuntimeError, match="not found or already closed"):
+        repo.close_trade(
+            trade_id="ghost",
+            exit_time=_dt("2026-04-20T14:00:00"),
+            exit_price=Decimal("5005"),
+            pnl_usd=Decimal("0"),
+        )
+
+
+def test_close_trade_raises_on_double_close(repo: JournalRepository):
+    repo.save_checklist(_make_checklist())
+    repo.save_trade(_make_trade())
+    repo.close_trade(
+        trade_id="t01",
+        exit_time=_dt("2026-04-20T14:00:00"),
+        exit_price=Decimal("5005"),
+        pnl_usd=Decimal("25"),
+    )
+    with pytest.raises(RuntimeError, match="already closed"):
+        repo.close_trade(
+            trade_id="t01",
+            exit_time=_dt("2026-04-20T14:30:00"),
+            exit_price=Decimal("5020"),
+            pnl_usd=Decimal("100"),
+        )
+
+
+def test_close_dry_run_raises_on_nonexistent(repo: JournalRepository):
+    from daytrader.journal.models import DryRunOutcome
+    with pytest.raises(RuntimeError, match="not found or already closed"):
+        repo.close_dry_run(
+            dry_run_id="ghost",
+            outcome=DryRunOutcome.TARGET_HIT,
+            outcome_time=_dt("2026-04-20T14:00:00"),
+            outcome_price=Decimal("5010"),
+            r_multiple=Decimal("2"),
+        )
+
+
+def test_list_dry_runs_filters_by_date(repo: JournalRepository):
+    from daytrader.journal.models import DryRun
+    repo.save_checklist(_make_checklist())
+    d1 = DryRun(
+        id="d01", checklist_id="c01", date=date(2026, 4, 20),
+        symbol="MES", direction=TradeSide.LONG, setup_type="orb",
+        identified_time=_dt("2026-04-20T13:35:00"),
+        hypothetical_entry=Decimal("5000"), hypothetical_stop=Decimal("4995"),
+        hypothetical_target=Decimal("5010"), hypothetical_size=1,
+    )
+    d2 = DryRun(
+        id="d02", checklist_id="c01", date=date(2026, 4, 21),
+        symbol="MES", direction=TradeSide.LONG, setup_type="orb",
+        identified_time=_dt("2026-04-21T13:35:00"),
+        hypothetical_entry=Decimal("5020"), hypothetical_stop=Decimal("5015"),
+        hypothetical_target=Decimal("5030"), hypothetical_size=1,
+    )
+    repo.save_dry_run(d1)
+    repo.save_dry_run(d2)
+    got = repo.list_dry_runs(on_date=date(2026, 4, 20))
+    assert len(got) == 1
+    assert got[0].id == "d01"
+
+
 def test_get_circuit_state_default(repo: JournalRepository):
     state = repo.get_circuit_state(date(2026, 4, 20))
     # returns a fresh unlocked state if missing
