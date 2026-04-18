@@ -15,6 +15,7 @@ dependencies = [
     "jinja2>=3.1",
     "anthropic>=0.40",
     "matplotlib>=3.8",
+    "pyarrow>=14.0",
 ]
 
 [project.optional-dependencies]
