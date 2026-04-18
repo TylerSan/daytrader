@@ -51,3 +51,4 @@ def sample_contract_md(tmp_path: Path) -> Path:
 """
     )
     return p
+
