@@ -1,0 +1,23 @@
+name: opening_range_breakout
+version: v1
+symbols: [MES, MNQ]
+session_window:
+  start: "09:30 America/New_York"
+  end: "11:30 America/New_York"
+opening_range:
+  duration_minutes: 15
+entry:
+  direction: long_if_above_or_short_if_below
+  trigger: price_closes_beyond_or_by_ticks
+  ticks: 2
+stop:
+  rule: opposite_side_of_or
+  offset_ticks: 2
+target:
+  rule: multiple_of_or_range
+  multiple: 2.0
+filters:
+  - no_entry_after: "11:00 America/New_York"
+  - min_or_range_ticks: 8
+  - max_or_range_ticks: 40
+  - skip_if_event: [fomc, cpi, nfp]
