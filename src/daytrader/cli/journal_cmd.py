@@ -262,6 +262,33 @@ def dry_run_end(dry_run_id, outcome, outcome_price, notes):
             writer.write_dry_run(dr)
 
 
+@click.group("resume-gate")
+def resume_gate_group():
+    """Resume gate commands."""
+
+
+@resume_gate_group.command("check")
+def resume_gate_check():
+    """Run the full resume gate check. Exits 0 on PASS, 1 on FAIL."""
+    from daytrader.journal.resume_gate import ResumeGateService
+    _cfg, repo, _ = _load_cfg_repo_writer()
+    svc = ResumeGateService(repo)
+    res = svc.check()
+    if res.passed:
+        click.echo("RESUME GATE: PASS -- ready to open combine/live")
+        for k, v in res.metrics.items():
+            click.echo(f"   {k}: {v}")
+    else:
+        click.echo("RESUME GATE: FAIL")
+        for f in res.failed_gates:
+            click.echo(f"   [{f.gate}] {f.reason}")
+        click.echo("")
+        click.echo("   Metrics:")
+        for k, v in res.metrics.items():
+            click.echo(f"     {k}: {v}")
+        raise click.exceptions.Exit(1)
+
+
 @sanity_group.command("run")
 @click.argument("setup_file", type=click.Path(exists=True, path_type=Path))
 @click.option("--symbol", multiple=True, default=None,
