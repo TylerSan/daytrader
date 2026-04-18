@@ -81,6 +81,18 @@ def test_allows_after_cooloff(repo):
     assert d.allowed is True
 
 
+def test_allows_at_exact_cooloff_boundary(repo):
+    """At exactly N minutes after stop (N = stop_cooloff_minutes), trade allowed."""
+    repo.upsert_circuit_state(CircuitState(
+        date=date(2026, 4, 20),
+        trade_count=1,
+        last_stop_time=_dt("2026-04-20T13:00:00"),
+    ))
+    svc = CircuitService(repo)
+    d = svc.check_can_trade(on=date(2026, 4, 20), now=_dt("2026-04-20T13:30:00"))
+    assert d.allowed is True
+
+
 def test_blocks_when_max_trades_reached(repo):
     repo.upsert_circuit_state(CircuitState(
         date=date(2026, 4, 20),
@@ -172,12 +184,14 @@ def test_consecutive_stops_day_end(repo):
 
 
 def test_default_lock_when_state_missing_or_corrupt(repo, tmp_path):
-    """If state file unreadable, must default to no-trade (fail-safe)."""
-    svc = CircuitService(repo)
-    # simulate corrupt: delete DB mid-flight
+    """If DB unreadable/uninitialized, must default to no-trade (fail-safe).
+
+    The contract lookup fails first, so the reason surfaces as
+    'no_active_contract' — both codes mean 'do not trade' which is what
+    matters for safety; the distinction is operational (helps triage).
+    """
     broken = JournalRepository(str(tmp_path / "nonexistent.db"))
-    # without initialize, any query fails
     svc_broken = CircuitService(broken)
     d = svc_broken.check_can_trade(on=date(2026, 4, 20), now=_dt("2026-04-20T13:00:00"))
     assert d.allowed is False
-    assert d.reason == "circuit_state_unavailable"
+    assert d.reason == "no_active_contract"

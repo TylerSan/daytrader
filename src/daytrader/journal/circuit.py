@@ -6,16 +6,16 @@ Makes go/no-go decisions for pre-trade.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date as date_type, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from daytrader.journal.models import CircuitState
+from daytrader.journal.models import CircuitState, Contract
 from daytrader.journal.repository import JournalRepository
 
-# TODO: move to Contract model when consecutive_stops_day_end field is added.
-CONSECUTIVE_STOPS_DAY_END = 2
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,23 +29,19 @@ class CircuitService:
     def __init__(self, repo: JournalRepository) -> None:
         self.repo = repo
 
-    def _contract_or_none(self):
+    def _contract_or_none(self) -> Optional[Contract]:
+        """Return active contract, or None if unavailable for any reason.
+        Logs exceptions for operational visibility while preserving the
+        fail-safe (no contract → no trade) semantics."""
         try:
             return self.repo.get_active_contract()
         except Exception:
+            log.exception("circuit: contract lookup failed")
             return None
 
     def check_can_trade(self, on: date_type, now: datetime) -> CircuitDecision:
-        try:
-            contract = self.repo.get_active_contract()
-        except Exception:
-            return CircuitDecision(
-                allowed=False,
-                reason="circuit_state_unavailable",
-            )
-
+        contract = self._contract_or_none()
         if contract is None:
-            # Fail-safe: no active contract → no trade
             return CircuitDecision(
                 allowed=False,
                 reason="no_active_contract",
@@ -54,7 +50,7 @@ class CircuitService:
         try:
             state = self.repo.get_circuit_state(on)
         except Exception:
-            # Fail-safe: circuit state inaccessible → no trade
+            log.exception("circuit: state lookup failed on %s", on)
             return CircuitDecision(
                 allowed=False,
                 reason="circuit_state_unavailable",
@@ -110,10 +106,9 @@ class CircuitService:
             no_trade = True
             lock_reason = "daily_loss_limit_hit"
 
-        # Rule: consecutive stops — heuristic via list_trades_on_date.
-        # If this trade is a stop AND the prior trade on the same date was also
-        # a losing trade, we have CONSECUTIVE_STOPS_DAY_END consecutive stops
-        # and should end the day.
+        # Rule: consecutive stops — structural heuristic. If the current
+        # trade is a stop AND the prior trade on the same date was also a
+        # losing trade, we have 2 consecutive stops → day ends.
         if (
             was_stop
             and state.last_stop_time is not None
