@@ -155,6 +155,69 @@ def sanity_group():
     """Sanity-floor backtest commands."""
 
 
+@click.group("dry-run")
+def dry_run_group():
+    """Dry-run session commands."""
+
+
+@dry_run_group.command("start")
+@click.option("--checklist-id", required=True)
+@click.option("--symbol", required=True, type=click.Choice(["MES", "MNQ", "MGC"]))
+@click.option("--direction", required=True, type=click.Choice(["long", "short"]))
+@click.option("--setup", "setup_type", required=True)
+@click.option("--entry", required=True, type=str)
+@click.option("--stop", required=True, type=str)
+@click.option("--target", required=True, type=str)
+@click.option("--size", required=True, type=int)
+def dry_run_start(checklist_id, symbol, direction, setup_type,
+                   entry, stop, target, size):
+    """Start a dry-run session (hypothetical trade)."""
+    from daytrader.journal.dry_run import DryRunService, DryRunStartInput
+    from daytrader.journal.models import TradeSide
+
+    _cfg, repo = _load_cfg_and_repo()
+    svc = DryRunService(repo)
+    try:
+        result = svc.start(
+            DryRunStartInput(
+                checklist_id=checklist_id, symbol=symbol,
+                direction=TradeSide(direction), setup_type=setup_type,
+                entry=Decimal(entry), stop=Decimal(stop),
+                target=Decimal(target), size=size,
+            ),
+            now=datetime.now(timezone.utc),
+        )
+    except ValueError as e:
+        raise click.UsageError(str(e))
+    click.echo(f"dry_run_id={result.dry_run_id}")
+
+
+@dry_run_group.command("end")
+@click.argument("dry_run_id")
+@click.option("--outcome", required=True,
+              type=click.Choice(["target_hit", "stop_hit", "rule_exit", "no_trigger"]))
+@click.option("--outcome-price", required=True, type=str)
+@click.option("--notes", default="")
+def dry_run_end(dry_run_id, outcome, outcome_price, notes):
+    """Close a dry-run session with actual market outcome."""
+    from daytrader.journal.dry_run import DryRunService, DryRunEndInput
+    from daytrader.journal.models import DryRunOutcome
+
+    _cfg, repo = _load_cfg_and_repo()
+    svc = DryRunService(repo)
+    try:
+        svc.end(DryRunEndInput(
+            dry_run_id=dry_run_id,
+            outcome=DryRunOutcome(outcome),
+            outcome_time=datetime.now(timezone.utc),
+            outcome_price=Decimal(outcome_price),
+            notes=notes or None,
+        ))
+    except ValueError as e:
+        raise click.UsageError(str(e))
+    click.echo(f"closed dry-run {dry_run_id}")
+
+
 @sanity_group.command("run")
 @click.argument("setup_file", type=click.Path(exists=True, path_type=Path))
 @click.option("--symbol", multiple=True, default=None,
