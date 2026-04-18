@@ -39,7 +39,7 @@ class ChecklistInput:
 @dataclass
 class ChecklistResult:
     passed: bool
-    checklist_id: str
+    checklist_id: Optional[str]
     trade_id: Optional[str] = None
     failure_reason: Optional[str] = None
     failed_items: list[str] = field(default_factory=list)
@@ -58,23 +58,74 @@ class ChecklistService:
         distance = abs(inp.entry_price - inp.stop_price)
         return distance * mult * inp.size
 
+    def _record_blocked_attempt(
+        self,
+        now: datetime,
+        mode: TradeMode,
+        contract_version: Optional[int],
+        reason: str,
+    ) -> str:
+        """Save an audit-only Checklist record for a blocked attempt.
+
+        Items are all False because the attempt never reached item evaluation.
+        This makes every trade attempt visible in the audit log, including
+        attempts blocked by the circuit or by a missing contract.
+        """
+        checklist_id = uuid.uuid4().hex[:12]
+        items = ChecklistItems(
+            item_stop_at_broker=False,
+            item_within_r_limit=False,
+            item_matches_locked_setup=False,
+            item_within_daily_r=False,
+            item_past_cooloff=False,
+        )
+        checklist = Checklist(
+            id=checklist_id,
+            timestamp=now,
+            mode=mode,
+            contract_version=contract_version or 0,
+            items=items,
+            passed=False,
+            failure_reason=f"blocked:{reason}",
+        )
+        try:
+            self.repo.save_checklist(checklist)
+        except Exception:
+            # If no contract exists yet, contract_version FK would normally
+            # fail. Task 3 removed that FK, so this should succeed even with 0.
+            # Keep fail-open: audit attempt is better-effort.
+            import logging
+            logging.getLogger(__name__).exception(
+                "checklist: failed to save blocked-attempt audit record"
+            )
+        return checklist_id
+
     def run(self, inp: ChecklistInput, now: datetime) -> ChecklistResult:
         d = now.date()
 
         contract = self.repo.get_active_contract()
         if contract is None:
+            cid = self._record_blocked_attempt(
+                now=now, mode=inp.mode, contract_version=None,
+                reason="no_active_contract",
+            )
             return ChecklistResult(
                 passed=False,
-                checklist_id="",
+                checklist_id=cid,
                 failure_reason="no_active_contract",
             )
 
         # 1. Circuit check (short-circuits the rest)
         decision = self.circuit.check_can_trade(on=d, now=now)
         if not decision.allowed:
+            cid = self._record_blocked_attempt(
+                now=now, mode=inp.mode,
+                contract_version=contract.version,
+                reason=decision.reason or "circuit_blocked",
+            )
             return ChecklistResult(
                 passed=False,
-                checklist_id="",
+                checklist_id=cid,
                 failure_reason=decision.reason,
             )
 
