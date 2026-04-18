@@ -9,4 +9,11 @@ data/db/*.db
 data/tick/
 data/imports/
 data/exports/
+data/cache/
 .pytest_cache/
+
+# Journal subsystem: user-authored contract + setups are not tracked.
+# The example YAML stays in the repo as a format reference.
+docs/trading/Contract.md
+docs/trading/setups/*.yaml
+!docs/trading/setups/example_*.yaml
