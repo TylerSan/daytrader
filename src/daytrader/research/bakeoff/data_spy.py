@@ -74,6 +74,27 @@ class SpyDataset:
     quality_report: pd.DataFrame
 
 
+def _consolidate_publishers(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate DBEQ.BASIC per-publisher bars into one bar per minute.
+
+    DBEQ.BASIC emits one row per (timestamp, publisher_id) — i.e. multiple
+    rows per minute when SPY trades on multiple venues. For strategy
+    backtests we want a single consolidated bar per minute:
+      open = first open in minute, high = max, low = min,
+      close = last close, volume = sum.
+    """
+    if not df.index.has_duplicates:
+        return df
+    agg = df.groupby(df.index).agg(
+        open=("open", "first"),
+        high=("high", "max"),
+        low=("low", "min"),
+        close=("close", "last"),
+        volume=("volume", "sum"),
+    )
+    return agg
+
+
 def load_spy_1m(
     start: _date,
     end: _date,
@@ -82,6 +103,7 @@ def load_spy_1m(
 ) -> SpyDataset:
     loader = SpyDatabentoLoader(api_key=api_key, cache_dir=cache_dir)
     raw = loader.load(start, end)
-    rth = filter_rth(raw)
+    consolidated = _consolidate_publishers(raw)
+    rth = filter_rth(consolidated)
     qa = data_quality_report(rth)
     return SpyDataset(bars=rth, quality_report=qa)

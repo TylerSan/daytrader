@@ -53,6 +53,33 @@ def test_spy_loader_cache_hit_skips_databento(tmp_path, mock_spy_client):
     mock_spy_client.timeseries.get_range.assert_not_called()
 
 
+def test_load_spy_1m_consolidates_multi_publisher_bars(tmp_path, mock_spy_client):
+    # DBEQ.BASIC returns one row per (minute, publisher). Same minute with
+    # two publishers → one consolidated bar: high=max, low=min, volume=sum.
+    idx = pd.DatetimeIndex([
+        pd.Timestamp("2024-06-10 13:30", tz="UTC"),  # pub A
+        pd.Timestamp("2024-06-10 13:30", tz="UTC"),  # pub B (dup ts)
+    ])
+    df = pd.DataFrame(
+        {"open": [450.0, 450.2], "high": [450.5, 451.0],
+         "low": [449.5, 450.1], "close": [450.2, 450.8],
+         "volume": [1000, 500]},
+        index=idx,
+    )
+    mock_spy_client.timeseries.get_range.return_value.to_df.return_value = df
+    ds = load_spy_1m(
+        start=date(2024, 6, 10), end=date(2024, 6, 10),
+        api_key="test", cache_dir=tmp_path,
+    )
+    assert len(ds.bars) == 1
+    bar = ds.bars.iloc[0]
+    assert bar["open"] == 450.0      # first
+    assert bar["high"] == 451.0      # max
+    assert bar["low"] == 449.5       # min
+    assert bar["close"] == 450.8     # last
+    assert bar["volume"] == 1500     # sum
+
+
 def test_load_spy_1m_filters_to_rth_and_reports_quality(tmp_path, mock_spy_client):
     idx = pd.DatetimeIndex([
         pd.Timestamp("2024-06-10 13:30", tz="UTC"),  # 09:30 ET
