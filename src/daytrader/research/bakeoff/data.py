@@ -107,9 +107,15 @@ from datetime import date as _date
 class MesDataset:
     """Cleaned MES bars + diagnostic artifacts.
 
-    - bars: UTC-indexed DataFrame, RTH only, has OHLCV + instrument_id
-    - rollover_skip_dates: list of ET dates to exclude from trading
-    - quality_report: per-day coverage DataFrame
+    - bars: UTC-indexed DataFrame, RTH only, has OHLCV + instrument_id.
+      WARNING: bars is NOT filtered by rollover_skip_dates or
+      quality_report.flag_low_coverage. Callers (strategies in Plan 2+)
+      MUST intersect bars' ET dates against these filter artifacts before
+      running backtests. See spec §5.2 R1 (rollover) and R3 (low coverage).
+    - rollover_skip_dates: list of local-ET dates on which trades must
+      not be opened (rollover day + preceding day).
+    - quality_report: per-day coverage DataFrame. The `flag_low_coverage`
+      column marks days that callers should exclude from pure-OOS counts.
     """
     bars: pd.DataFrame
     rollover_skip_dates: list[_date]

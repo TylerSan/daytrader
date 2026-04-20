@@ -43,4 +43,14 @@ print(f"End:   ${eq.iloc[-1]:,.2f}")
 print(f"Return: {(eq.iloc[-1] / eq.iloc[0] - 1) * 100:+.2f}%")
 ```
 
-MES 2024 should show roughly +20–25% before cost (S&P 500 total return), minus ~$80 in rollover costs (4 rolls × $2.50 × $5/contract adjustment, exact value depends on roll levels). A significant deviation means the baseline code has a bug — do not proceed to Plan 2 until that's resolved.
+MES 2024 should show roughly **+50% on a $10k starting capital with 1 contract**. This is ~2.5× the underlying S&P return because 1 MES contract (~$25k notional at price 5000) against a $10k cash base is leveraged ~2.5×. The scale-invariant check that actually matters is the **baseline Sharpe ≈ 0.5** (spec §5.3 M2 checkpoint) — not the return percentage. To verify, compute:
+
+```python
+import numpy as np
+returns = eq.pct_change().dropna()
+# Annualize: ~252 trading days × 390 minutes = 98,280 per-bar returns per year
+ann_sharpe = (returns.mean() / returns.std()) * np.sqrt(252 * 390)
+print(f"Annualized Sharpe: {ann_sharpe:.2f}")
+```
+
+A Sharpe dramatically different from 0.3-0.7 suggests the baseline implementation has a bug.
