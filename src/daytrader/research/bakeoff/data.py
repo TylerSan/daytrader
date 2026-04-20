@@ -55,6 +55,9 @@ def detect_rollover_skip_dates(df: pd.DataFrame) -> list[date]:
 RTH_OPEN = time(9, 30)
 RTH_CLOSE = time(16, 0)
 
+RTH_BARS_PER_DAY = 390       # 6.5h * 60min
+LOW_COVERAGE_THRESHOLD = 99.0  # pct; below this → flag
+
 
 def filter_rth(df: pd.DataFrame) -> pd.DataFrame:
     """Keep only bars whose timestamp falls in [09:30, 16:00) ET.
@@ -67,3 +70,29 @@ def filter_rth(df: pd.DataFrame) -> pd.DataFrame:
     local_times = df.index.tz_convert(ET).time
     mask = (local_times >= RTH_OPEN) & (local_times < RTH_CLOSE)
     return df[mask].copy()
+
+
+def data_quality_report(df: pd.DataFrame) -> pd.DataFrame:
+    """Return per-day bar counts and coverage flags.
+
+    Expects RTH-filtered input (use filter_rth first). Returns a DataFrame
+    indexed by local ET date with columns: n_bars, coverage_pct,
+    flag_low_coverage (bool).
+
+    Empty input returns an empty DataFrame with the correct schema.
+    """
+    if df.empty:
+        return pd.DataFrame(
+            columns=["n_bars", "coverage_pct", "flag_low_coverage"],
+            index=pd.Index([], name="date"),
+        )
+    local_dates = df.index.tz_convert(ET).date
+    by_day = pd.Series(local_dates).value_counts().sort_index()
+    coverage = by_day / RTH_BARS_PER_DAY * 100.0
+    rep = pd.DataFrame({
+        "n_bars": by_day,
+        "coverage_pct": coverage,
+        "flag_low_coverage": coverage < LOW_COVERAGE_THRESHOLD,
+    })
+    rep.index.name = "date"
+    return rep

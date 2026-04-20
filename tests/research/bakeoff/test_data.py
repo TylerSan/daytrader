@@ -112,3 +112,47 @@ def test_filter_rth_handles_dst_transition():
     df = _ohlcv_frame(ts)
     out = filter_rth(df)
     assert len(out) == 2
+
+
+from daytrader.research.bakeoff.data import data_quality_report
+
+
+def test_data_quality_report_perfect_day():
+    # 390 bars at 1-min intervals starting 13:30 UTC (09:30 ET) on 2024-06-10 (EDT).
+    start = pd.Timestamp("2024-06-10 09:30", tz=ET).tz_convert("UTC")
+    idx = pd.date_range(start, periods=390, freq="1min", tz="UTC")
+    df = pd.DataFrame(
+        {"open": 0.0, "high": 0.0, "low": 0.0, "close": 0.0, "volume": 1,
+         "instrument_id": 100},
+        index=idx,
+    )
+    rep = data_quality_report(df)
+    assert rep.loc[date(2024, 6, 10), "n_bars"] == 390
+    assert rep.loc[date(2024, 6, 10), "coverage_pct"] == pytest.approx(100.0)
+    assert rep.loc[date(2024, 6, 10), "flag_low_coverage"] == False
+
+
+def test_data_quality_report_missing_bars():
+    # 385 bars (5 missing) → 98.7% coverage → flag.
+    start = pd.Timestamp("2024-06-10 09:30", tz=ET).tz_convert("UTC")
+    full = pd.date_range(start, periods=390, freq="1min", tz="UTC")
+    # Drop 5 arbitrary bars.
+    kept = full.delete([10, 20, 30, 40, 50])
+    df = pd.DataFrame(
+        {"open": 0.0, "high": 0.0, "low": 0.0, "close": 0.0, "volume": 1,
+         "instrument_id": 100},
+        index=kept,
+    )
+    rep = data_quality_report(df)
+    assert rep.loc[date(2024, 6, 10), "n_bars"] == 385
+    assert rep.loc[date(2024, 6, 10), "coverage_pct"] < 99.0
+    assert rep.loc[date(2024, 6, 10), "flag_low_coverage"] == True
+
+
+def test_data_quality_report_empty_frame():
+    df = pd.DataFrame(
+        columns=["open", "high", "low", "close", "volume", "instrument_id"],
+        index=pd.DatetimeIndex([], tz="UTC"),
+    )
+    rep = data_quality_report(df)
+    assert rep.empty
