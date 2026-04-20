@@ -156,3 +156,54 @@ def test_data_quality_report_empty_frame():
     )
     rep = data_quality_report(df)
     assert rep.empty
+
+
+from unittest.mock import MagicMock
+from pathlib import Path
+
+from daytrader.research.bakeoff.data import MesDatabentoLoader
+
+
+@pytest.fixture
+def mock_client(monkeypatch):
+    """Patch databento.Historical constructor to return a pre-canned mock."""
+    mock = MagicMock()
+    mock_df = pd.DataFrame(
+        {"open": [100.0, 101.0], "high": [100.5, 101.5],
+         "low": [99.5, 100.5], "close": [100.2, 101.2],
+         "volume": [500, 600], "instrument_id": [42, 42]},
+        index=pd.DatetimeIndex(
+            [pd.Timestamp("2024-06-10 13:30", tz="UTC"),
+             pd.Timestamp("2024-06-10 13:31", tz="UTC")]
+        ),
+    )
+    mock.timeseries.get_range.return_value.to_df.return_value = mock_df
+    monkeypatch.setattr("databento.Historical", lambda *a, **kw: mock)
+    return mock
+
+
+def test_loader_cache_miss_calls_databento(tmp_path, mock_client):
+    loader = MesDatabentoLoader(
+        api_key="test-key",
+        cache_dir=tmp_path,
+    )
+    df = loader.load(date(2024, 6, 10), date(2024, 6, 10))
+    assert len(df) == 2
+    assert "instrument_id" in df.columns
+    mock_client.timeseries.get_range.assert_called_once()
+
+
+def test_loader_cache_hit_skips_databento(tmp_path, mock_client):
+    loader = MesDatabentoLoader(api_key="test-key", cache_dir=tmp_path)
+    # First call populates cache.
+    loader.load(date(2024, 6, 10), date(2024, 6, 10))
+    mock_client.reset_mock()
+    # Second call should NOT hit Databento.
+    df2 = loader.load(date(2024, 6, 10), date(2024, 6, 10))
+    assert len(df2) == 2
+    mock_client.timeseries.get_range.assert_not_called()
+
+
+def test_loader_missing_api_key_raises():
+    with pytest.raises(ValueError, match="api_key"):
+        MesDatabentoLoader(api_key="", cache_dir=Path("/tmp"))

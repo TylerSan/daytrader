@@ -96,3 +96,59 @@ def data_quality_report(df: pd.DataFrame) -> pd.DataFrame:
     })
     rep.index.name = "date"
     return rep
+
+
+from dataclasses import dataclass
+from pathlib import Path
+from datetime import date as _date
+
+
+@dataclass
+class MesDatabentoLoader:
+    """Fetch MES 1-minute OHLCV from Databento, cached to parquet.
+
+    Uses Databento's `continuous` symbology with `c-1` (front-month by open
+    interest). Raw fetch (including `instrument_id` column for rollover
+    detection) is cached to `<cache_dir>/MES_1m_<start>_<end>_raw.parquet`.
+    """
+    api_key: str
+    cache_dir: Path
+
+    def __post_init__(self):
+        if not self.api_key:
+            raise ValueError("api_key is required")
+        self.cache_dir = Path(self.cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _cache_path(self, start: _date, end: _date) -> Path:
+        return self.cache_dir / (
+            f"MES_1m_{start.isoformat()}_{end.isoformat()}_raw.parquet"
+        )
+
+    def load(self, start: _date, end: _date) -> pd.DataFrame:
+        """Return UTC-indexed DataFrame with OHLCV + instrument_id.
+
+        Inclusive on both ends. Cache-first.
+        """
+        p = self._cache_path(start, end)
+        if p.exists():
+            return pd.read_parquet(p)
+
+        import databento
+        client = databento.Historical(self.api_key)
+        req = client.timeseries.get_range(
+            dataset="GLBX.MDP3",
+            schema="ohlcv-1m",
+            symbols=["MES.c.0"],  # continuous front-month by OI
+            stype_in="continuous",
+            start=start.isoformat(),
+            end=(pd.Timestamp(end) + pd.Timedelta(days=1)).date().isoformat(),
+        )
+        df = req.to_df()
+        # Normalize timezone to UTC.
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC")
+        else:
+            df.index = df.index.tz_convert("UTC")
+        df.to_parquet(p)
+        return df
