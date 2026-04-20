@@ -15,6 +15,10 @@ dependencies = [
     "jinja2>=3.1",
     "anthropic>=0.40",
     "matplotlib>=3.8",
+    "pyarrow>=14.0",
+    "databento>=0.42",
+    "lib-pybroker>=1.0",
+    "quantstats>=0.0.62",
 ]
 
 [project.optional-dependencies]

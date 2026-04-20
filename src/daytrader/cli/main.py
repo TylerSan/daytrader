@@ -101,3 +101,14 @@ def book() -> None:
 @cli.group()
 def journal() -> None:
     """Trade journal & import."""
+
+
+from daytrader.cli.journal_cmd import pre_trade, post_trade, circuit_group, sanity_group, dry_run_group, resume_gate_group, audit_cmd  # noqa: E402
+
+journal.add_command(pre_trade)
+journal.add_command(post_trade)
+journal.add_command(circuit_group)
+journal.add_command(sanity_group)
+journal.add_command(dry_run_group)
+journal.add_command(resume_gate_group)
+journal.add_command(audit_cmd)

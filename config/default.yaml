@@ -27,3 +27,13 @@ premarket:
 
 backtest:
   default_config: stacked_imbalance.yaml
+
+journal:
+  db_path: data/db/journal.db
+  contract_path: docs/trading/Contract.md
+  setups_dir: docs/trading/setups
+  data_cache_dir: data/cache/ohlcv
+  obsidian:
+    trades_folder: DayTrader/Trades
+    dry_runs_folder: DayTrader/DryRuns
+    checklists_folder: DayTrader/Daily

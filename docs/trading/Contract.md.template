@@ -1,0 +1,70 @@
+# Trading Contract
+
+**Version:** 1
+**Signed date:** YYYY-MM-DD
+**Active:** false
+
+---
+
+## 1. Account & R Unit
+
+- Primary account: <Topstep $50k combine | IBKR self-funded | ...>
+- Starting capital: $XXXXX
+- R unit (USD): $XX   # ≈ daily_loss_limit / 3
+
+## 2. Per-Trade Risk
+
+- max_loss_per_trade_r: 1
+- max_contracts: 2
+- stop_must_be_at_broker: true   # OCO/bracket before acknowledged
+
+## 3. Daily Risk
+
+- daily_loss_limit_r: 3
+- daily_loss_warning_r: 2
+- max_trades_per_day: 5
+
+## 4. Setup Lock-In
+
+- locked_setup_name: <filled after W2 Setup Gate>
+- locked_setup_file: docs/trading/setups/<filename>.yaml
+- lock_in_min_trades: 30
+- backup_setup_name: <filled in W2>
+- backup_setup_file: docs/trading/setups/<filename>.yaml
+- backup_setup_status: benched
+
+## 5. Execution Rules
+
+- entry_via_cli_only: true                 # Must go through `daytrader journal pre-trade`
+- stop_move_direction: toward_profit_only  # Never move stop further away
+- stop_move_after_target_1_hit_only: true
+- target_structure: scale_50_at_t1_trail_remainder
+
+## 6. Zero-Tolerance Bans
+
+- ban_averaging_down_losers: true
+- ban_moving_stop_away: true
+- ban_bypass_pre_trade_checklist: true
+- ban_revenge_trade_within_cooloff: true
+- ban_trade_after_daily_limit: true
+
+## 7. Cool-off
+
+- stop_cooloff_minutes: 30
+- consecutive_stops_day_end: 2
+- minus_2r_cooloff_minutes: 30
+
+## 8. Amendment Process
+
+- amendments_weekend_only: true
+- amendment_wait_days: 7
+- amendment_forbidden_on_loss_day: true
+
+---
+
+## Signature
+
+I commit to these rules. Violation of any zero-tolerance ban invalidates
+the current trading day's results.
+
+Signed: ______________   Date: YYYY-MM-DD
