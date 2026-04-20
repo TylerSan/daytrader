@@ -207,3 +207,34 @@ def test_loader_cache_hit_skips_databento(tmp_path, mock_client):
 def test_loader_missing_api_key_raises():
     with pytest.raises(ValueError, match="api_key"):
         MesDatabentoLoader(api_key="", cache_dir=Path("/tmp"))
+
+
+from daytrader.research.bakeoff.data import load_mes_1m, MesDataset
+
+
+def test_load_mes_1m_returns_clean_dataset(tmp_path, mock_client):
+    # Replace the single-day mock with a 2-day mock that spans a rollover.
+    idx = pd.DatetimeIndex([
+        pd.Timestamp("2024-06-10 13:30", tz="UTC"),  # 09:30 ET day 1
+        pd.Timestamp("2024-06-10 20:30", tz="UTC"),  # 16:30 ET day 1 — after RTH, drop
+        pd.Timestamp("2024-06-11 13:30", tz="UTC"),  # 09:30 ET day 2 (new iid)
+    ])
+    df = pd.DataFrame(
+        {"open": [1.0, 1.0, 1.0], "high": [1.0, 1.0, 1.0],
+         "low": [1.0, 1.0, 1.0], "close": [1.0, 1.0, 1.0],
+         "volume": [1, 1, 1], "instrument_id": [42, 42, 43]},
+        index=idx,
+    )
+    mock_client.timeseries.get_range.return_value.to_df.return_value = df
+
+    ds = load_mes_1m(
+        start=date(2024, 6, 10), end=date(2024, 6, 11),
+        api_key="test", cache_dir=tmp_path,
+    )
+    assert isinstance(ds, MesDataset)
+    # After RTH filter: 2 bars (post-RTH bar dropped).
+    assert len(ds.bars) == 2
+    # Rollover between iid 42 and 43 → skip dates 2024-06-10 + 2024-06-11.
+    assert ds.rollover_skip_dates == [date(2024, 6, 10), date(2024, 6, 11)]
+    # Quality report per remaining day.
+    assert set(ds.quality_report.index) == {date(2024, 6, 10), date(2024, 6, 11)}

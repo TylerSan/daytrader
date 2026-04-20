@@ -104,6 +104,19 @@ from datetime import date as _date
 
 
 @dataclass
+class MesDataset:
+    """Cleaned MES bars + diagnostic artifacts.
+
+    - bars: UTC-indexed DataFrame, RTH only, has OHLCV + instrument_id
+    - rollover_skip_dates: list of ET dates to exclude from trading
+    - quality_report: per-day coverage DataFrame
+    """
+    bars: pd.DataFrame
+    rollover_skip_dates: list[_date]
+    quality_report: pd.DataFrame
+
+
+@dataclass
 class MesDatabentoLoader:
     """Fetch MES 1-minute OHLCV from Databento, cached to parquet.
 
@@ -152,3 +165,22 @@ class MesDatabentoLoader:
             df.index = df.index.tz_convert("UTC")
         df.to_parquet(p)
         return df
+
+
+def load_mes_1m(
+    start: _date,
+    end: _date,
+    api_key: str,
+    cache_dir: Path,
+) -> MesDataset:
+    """End-to-end loader: fetch → RTH filter → diagnostics.
+
+    Rollover detection runs on the raw (pre-RTH-filter) data so that mid-day
+    instrument_id transitions are not lost.
+    """
+    loader = MesDatabentoLoader(api_key=api_key, cache_dir=cache_dir)
+    raw = loader.load(start, end)
+    skip_dates = detect_rollover_skip_dates(raw)
+    rth = filter_rth(raw)
+    qa = data_quality_report(rth)
+    return MesDataset(bars=rth, rollover_skip_dates=skip_dates, quality_report=qa)
