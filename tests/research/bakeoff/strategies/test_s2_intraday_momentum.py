@@ -213,3 +213,78 @@ def test_s2_skips_days_before_warmup_ready():
     strat = S2a_IntradayMomentum_Max1(symbol="SPY")
     trades = strat.generate_trades(day1, day1_d)
     assert trades == []
+
+
+def _multiday_1m(days):
+    """days: list of (date_str, list of ('HH:MM', o, h, l, c))."""
+    frames = [_minutes(d, rows) for d, rows in days]
+    return pd.concat(frames).sort_index()
+
+
+def _multiday_daily(rows):
+    df = pd.DataFrame(
+        [{"open": o, "high": h, "low": l, "close": c}
+         for _d, o, h, l, c in rows],
+        index=pd.DatetimeIndex([r[0] for r in rows]).normalize(),
+    )
+    df.index.name = "date"
+    return df
+
+
+def test_s2b_counts_at_least_as_many_trades_as_s2a_across_days():
+    """5-day multi-day fixture — S2b trade count must be >= S2a's,
+    and each S2a trade must be on a unique date."""
+    from daytrader.research.bakeoff.strategies._s2_core import CHECK_TIMES_ET
+
+    # Warmup: WARMUP_DAYS days, all flat.
+    warmup_days_1m = []
+    for k in range(WARMUP_DAYS):
+        d = f"2024-05-{k+1:02d}"
+        rows = [(hm, 100.0, 100.0, 100.0, 100.0)
+                for hm in ["09:30"] + CHECK_TIMES_ET + ["15:55"]]
+        warmup_days_1m.append((d, rows))
+
+    # Real days with at least one breakout each.
+    real_days_1m = []
+    for k in range(5):
+        d = f"2024-05-{WARMUP_DAYS + 1 + k:02d}"
+        rows = []
+        for hm in ["09:30"] + CHECK_TIMES_ET + ["15:55"]:
+            if hm == "09:30":
+                rows.append((hm, 100.0, 100.0, 100.0, 100.0))
+            elif hm == "10:00":
+                rows.append((hm, 100.5, 100.5, 100.5, 100.5))   # trade 1 long
+            elif hm == "10:30":
+                rows.append((hm, 98.0, 98.0, 98.0, 98.0))       # stop 1
+            elif hm == "11:00":
+                rows.append((hm, 101.0, 101.0, 101.0, 101.0))   # S2b trade 2
+            elif hm == "11:30":
+                rows.append((hm, 99.0, 99.0, 99.0, 99.0))       # stop 2
+            elif hm == "15:55":
+                rows.append((hm, 99.0, 99.0, 99.0, 99.0))
+            else:
+                rows.append((hm, 100.0, 100.0, 100.0, 100.0))
+        real_days_1m.append((d, rows))
+
+    bars_1m = _multiday_1m(warmup_days_1m + real_days_1m)
+
+    warmup_d = [(f"2024-05-{k+1:02d}", 100.0, 100.5, 99.5, 100.0)
+                for k in range(WARMUP_DAYS)]
+    real_d = [(f"2024-05-{WARMUP_DAYS + 1 + k:02d}", 100.0, 101.0, 98.0, 99.0)
+              for k in range(5)]
+    bars_1d = _multiday_daily(warmup_d + real_d)
+
+    s2a = S2a_IntradayMomentum_Max1(symbol="SPY").generate_trades(bars_1m, bars_1d)
+    s2b = S2b_IntradayMomentum_Max5(symbol="SPY").generate_trades(bars_1m, bars_1d)
+    # Core invariant: S2b always generates at least as many trades as S2a.
+    assert len(s2b) >= len(s2a), f"S2b {len(s2b)} < S2a {len(s2a)} — logic bug"
+    # S2a caps at 1/day, so each trade must be on a unique date.
+    assert len(set(t.date for t in s2a)) == len(s2a)
+    # Every S2a trade must correspond to a date that also appears in S2b
+    # (same entries, S2b just allows more per day).
+    s2a_dates = set(t.date for t in s2a)
+    s2b_dates = set(t.date for t in s2b)
+    assert s2a_dates.issubset(s2b_dates), (
+        f"S2a trades on {s2a_dates - s2b_dates} but S2b didn't — entry "
+        "logic must be identical between the two strategies."
+    )
