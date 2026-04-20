@@ -7,7 +7,8 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from daytrader.research.bakeoff.data import detect_rollover_skip_dates
+from daytrader.research.bakeoff.data import detect_rollover_skip_dates, filter_rth
+from daytrader.research.bakeoff.data import ET
 
 
 def _frame(rows):
@@ -69,3 +70,45 @@ def test_detect_rollover_skip_dates_empty_frame():
         index=pd.DatetimeIndex([], tz="UTC"),
     )
     assert detect_rollover_skip_dates(df) == []
+
+
+def _ohlcv_frame(timestamps_ts_tz):
+    """timestamps_ts_tz: list of (tz-aware pd.Timestamp) -> DataFrame with OHLCV."""
+    idx = pd.DatetimeIndex(timestamps_ts_tz).tz_convert("UTC")
+    n = len(idx)
+    return pd.DataFrame(
+        {"open": range(n), "high": range(n), "low": range(n),
+         "close": range(n), "volume": [1] * n,
+         "instrument_id": [100] * n},
+        index=idx,
+    )
+
+
+def test_filter_rth_keeps_open_and_drops_close_boundary():
+    # 13:30 UTC = 09:30 ET (EDT); 20:00 UTC = 16:00 ET (EDT).
+    # June 2024 → EDT (UTC-4).
+    ts = [
+        pd.Timestamp("2024-06-10 09:29", tz=ET),  # 09:29 ET — drop (pre-open)
+        pd.Timestamp("2024-06-10 09:30", tz=ET),  # 09:30 ET — KEEP
+        pd.Timestamp("2024-06-10 15:59", tz=ET),  # 15:59 ET — KEEP
+        pd.Timestamp("2024-06-10 16:00", tz=ET),  # 16:00 ET — drop (close boundary excl.)
+        pd.Timestamp("2024-06-10 18:00", tz=ET),  # after-hours — drop
+    ]
+    df = _ohlcv_frame(ts)
+    out = filter_rth(df)
+    # Should have 2 rows: 09:30 and 15:59.
+    assert len(out) == 2
+    assert out.index[0].tz_convert(ET).strftime("%H:%M") == "09:30"
+    assert out.index[1].tz_convert(ET).strftime("%H:%M") == "15:59"
+
+
+def test_filter_rth_handles_dst_transition():
+    # DST boundary 2024-11-03 02:00 ET. Day before = EDT, day after = EST.
+    # An 09:30 bar on both days should be kept regardless of UTC offset change.
+    ts = [
+        pd.Timestamp("2024-11-01 09:30", tz=ET),  # EDT day — keep
+        pd.Timestamp("2024-11-04 09:30", tz=ET),  # EST day — keep
+    ]
+    df = _ohlcv_frame(ts)
+    out = filter_rth(df)
+    assert len(out) == 2

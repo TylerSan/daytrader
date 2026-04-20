@@ -11,7 +11,7 @@ See spec §1.2, §2.3, R1, R3.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -50,3 +50,20 @@ def detect_rollover_skip_dates(df: pd.DataFrame) -> list[date]:
             skip.add(local_dates[i])
             skip.add(local_dates[i - 1])
     return sorted(skip)
+
+
+RTH_OPEN = time(9, 30)
+RTH_CLOSE = time(16, 0)
+
+
+def filter_rth(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only bars whose timestamp falls in [09:30, 16:00) ET.
+
+    Input must be UTC-indexed. DST-aware via zoneinfo. Returns a new DataFrame;
+    does not mutate input.
+    """
+    if df.empty:
+        return df.copy()
+    local_times = df.index.tz_convert(ET).time
+    mask = (local_times >= RTH_OPEN) & (local_times < RTH_CLOSE)
+    return df[mask].copy()
