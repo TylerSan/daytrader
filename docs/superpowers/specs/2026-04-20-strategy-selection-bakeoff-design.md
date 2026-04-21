@@ -18,14 +18,15 @@
 
 ## 0. TL;DR
 
-在 MES 2022-01 至 2025-12 的 1-minute Databento 数据上,用 **pybroker** 做 walk-forward,把 **4 个候选策略** bake-off,按预设硬门槛筛选,winner 写进 Contract.md `locked_setup`,runner-up 进 `backup_setup`。**若 0 个过关,不签 Contract,返回 brainstorming。**
+在 SPY 2018-05 至 2024-12 的 1-minute ARCX.PILLAR 数据上,用 **pybroker** 做 walk-forward,把 **2 个活跃候选策略**(S1a + S1b)bake-off,按预设硬门槛筛选,winner 写进 Contract.md `locked_setup`,runner-up 进 `backup_setup`。**若 0 个过关,不签 Contract,返回 brainstorming。**
 
-- 4 候选:Zarattini 2023 5-min ORB × {10× OR range target, EOD only};Zarattini-Aziz-Barbon 2024 "Beat the Market" Intraday Momentum × {1 trade/day, 5 trades/day}
+- 2 活跃候选:Zarattini 2023 5-min ORB × {10× OR range target, EOD only}
+- 2 候选已 **deferred**(S2a/S2b Intraday Momentum)——  Plan 2c ATR 扫描证明 SPY 上无 edge(avg_MFE < 0.35R 普遍失败,entry signal 噪声化)。详见 [`docs/research/bakeoff/2026-04-21-s2-atr-scan-findings.md`](../../research/bakeoff/2026-04-21-s2-atr-scan-findings.md)。S2 代码 + 规则 + KAT 保留,便于未来重设计。
 - 引擎:pybroker(research)+ in-house sanity_floor(gate,冻结状态)
-- 数据:Databento OHLCV-1m 一次性历史购买(预估 <$20)
-- 评估:replication 窗口(2022-2024Q1)+ pure OOS(2024Q2-2025)分开报告,主决策看 pure OOS
-- 硬门槛(pure OOS):Sharpe ≥ 1.0,Max DD ≤ 15%,Profit factor ≥ 1.3,n ≥ 100,DSR p < 0.10
-- 明确允许"全部不过 → 不签 Contract"
+- 数据:Databento ARCX.PILLAR `ohlcv-1m` + `ohlcv-1d`,已一次性购买(实际 ~\$0.88 for 6.5y;Plan 2a 早期 DBEQ.BASIC ~\$2 弃用)
+- 评估:replication 窗口(2018-05 → 2024-03)+ pure OOS(2024-04 起)分开报告,主决策看 pure OOS
+- 硬门槛(pure OOS):Sharpe ≥ 1.0,Max DD ≤ 15%,Profit factor ≥ 1.3,n ≥ 100,DSR p < 0.10 (`n_trials = 2`)
+- 明确允许"全部不过 → 不签 Contract"(按 Plan 2c 的 S1 noise-level gross PnL,这是预期的首要结局)
 
 ---
 
@@ -44,7 +45,7 @@
       ├── data.py                             # Databento loader → data/cache/ohlcv/
       ├── strategies/
       │   ├── s1_orb.py                       # S1a + S1b
-      │   └── s2_intraday_momentum.py         # S2a + S2b
+      │   └── s2_intraday_momentum.py         # S2a + S2b (DEFERRED per Plan 2c)
       ├── costs.py                            # MES 佣金/滑点模型(共享)
       ├── walkforward.py                      # pybroker orchestration + 结果汇总
       ├── metrics.py                          # Sharpe/Sortino/MDD/PF/expectancy/DSR/bootstrap CI
@@ -123,7 +124,7 @@ S2 论文样本 2007-2024 Q1,S1 论文样本 2016-2023。我们回测窗口 2022
 
 **但做 6-month rolling 滚动绩效报告**(不改参数,只分段计算 Sharpe / DD)—— 用于发现 regime-conditional 表现(比如 S1 只在高波动期工作)。诊断用,不决策。
 
-### 2.3 成本模型(共享给全部 4 候选)
+### 2.3 成本模型(共享给 S1 活跃候选;S2 deferred)
 
 | 项 | 数值 | 来源 |
 |---|---|---|
@@ -152,7 +153,7 @@ S2 论文用 "net of costs" 但未拆分,我们**必须自己重建,不信论文
 | | Bootstrap 95% CI of Sharpe(10k resample) | 下界 > 0 |
 | 基线对比 | 超额 Sharpe vs buy-and-hold MES | > 0.3 |
 
-**加粗 5 项 = 硬门槛,任一不过即不推荐锁定。** DSR `n_trials = 4`(S1a + S1b + S2a + S2b)。
+**加粗 5 项 = 硬门槛,任一不过即不推荐锁定。** DSR **`n_trials = 2`**(S1a + S1b;S2a/S2b per Plan 2c deferred,不计入 multiple-testing penalty)。
 
 **Baseline 定义:** "buy-and-hold MES" = 2022-01-03 到 2025-12-31 持有 1 手 MES 前月合约,按 Databento 标准 roll 日滚动(详见 §3,数据与 rollover 处理一致)。Sharpe 以扣除 roll 滑点后 equity curve 计算,不扣借贷成本(Micro contract 保证金占用极小,忽略)。
 
@@ -172,12 +173,14 @@ S2 论文用 "net of costs" 但未拆分,我们**必须自己重建,不信论文
 
 ### 3.1 候选矩阵
 
-| 代号 | 家族 | 关键变种 | 来源 |
-|---|---|---|---|
-| **S1a** | Zarattini 5-min ORB | 止盈 = 10 × OR range OR EOD | Zarattini & Aziz 2023 SSRN 4416622(2023 版解读) |
-| **S1b** | Zarattini 5-min ORB | 止盈 = EOD only | Zarattini, Barbon, Aziz 2024 SSRN 4729284(2024 版解读) |
-| **S2a** | "Beat the Market" Intraday Momentum | 每日最多 1 笔 | Zarattini, Aziz, Barbon 2024 Swiss Finance Inst RP 24-97(保守) |
-| **S2b** | "Beat the Market" Intraday Momentum | 每日最多 5 笔 | 同上(贴合 Contract `max_trades_per_day: 5` 上限,接近论文原意) |
+| 代号 | 家族 | 关键变种 | 状态 | 来源 |
+|---|---|---|---|---|
+| **S1a** | Zarattini 5-min ORB | 止盈 = 10 × OR range OR EOD | **Active** | Zarattini & Aziz 2023 SSRN 4416622(2023 版解读) |
+| **S1b** | Zarattini 5-min ORB | 止盈 = EOD only | **Active** | Zarattini, Barbon, Aziz 2024 SSRN 4729284(2024 版解读) |
+| ~~S2a~~ | "Beat the Market" Intraday Momentum | 每日最多 1 笔 | **Deferred** | Zarattini, Aziz, Barbon 2024 Swiss Finance Inst RP 24-97(保守) |
+| ~~S2b~~ | "Beat the Market" Intraday Momentum | 每日最多 5 笔 | **Deferred** | 同上(贴合 Contract `max_trades_per_day: 5` 上限,接近论文原意) |
+
+**S2 deferral 依据:** Plan 2c 在 SPY 2018-05 → 2023-12(1424 交易日)上扫描 `atr_multiplier ∈ {1.0, 1.5, 2.0, 2.5, 3.0}`,每个 multiplier 的 S2a gross avg_R 均为负,`avg_MFE_R` 最高 0.35(远低于 1.0 阈值),入场信号无方向性 follow-through。详见 [`docs/research/bakeoff/2026-04-21-s2-atr-scan-findings.md`](../../research/bakeoff/2026-04-21-s2-atr-scan-findings.md) §Decision。规则 + 代码 + KAT 保留,留给未来 S2 redesign 或完全不同策略家族复用。
 
 ### 3.2 S1 Zarattini 5-min ORB(裸核心,去 Stocks-in-Play)
 
@@ -198,7 +201,9 @@ S2 论文用 "net of costs" 但未拆分,我们**必须自己重建,不信论文
 - 固定 1 contract 不按 ATR 缩放(论文用 vol-targeted sizing)——因 Contract `max_contracts` 硬顶
 - 止盈用 OR range 倍数(S1a)—— 相比论文 ATR 倍数少一个自由度;敏感性实验单独对照原版 ATR 配置
 
-### 3.3 S2 Zarattini "Beat the Market" Intraday Momentum
+### 3.3 S2 Zarattini "Beat the Market" Intraday Momentum — DEFERRED
+
+> **Status (2026-04-21):** Deferred from Plan 3 per Plan 2c findings. Rules below retained for future redesign reference. Code at `src/daytrader/research/bakeoff/strategies/s2_intraday_momentum.py` stays in the repo; S2 KATs stay skipped by default. Plan 3 does not load or run S2.
 
 **核心变量(按论文逐字):**
 
@@ -245,11 +250,11 @@ else:
 | 实验 | 扫描 | 若结果如此 → |
 |---|---|---|
 | SE-1 Cost | 成本 × {0, 1, 2} | 2× 由正转负 → 边沿对滑点过敏,降低置信度 |
-| SE-2 Signal reversal | 4 候选全部反转 long↔short | 反转也正期望 → 赚 long-bias 贝塔,**否决**该候选 |
+| SE-2 Signal reversal | 2 活跃候选全部反转 long↔short | 反转也正期望 → 赚 long-bias 贝塔,**否决**该候选 |
 | SE-3 OOS 季度稳定性 | pure OOS 拆 Q1..Q7 | 某季度 < −3% eq → 记录为 regime fragility |
 | SE-4 S1 OR duration | {5, 10, 15, 30} min(延用 S1a 止盈) | 只有 5 min 过 → 过拟合指标,降 S1 置信度 |
-| SE-5 S2 lookback | {7, 14, 21, 28} 天 | 仅 14 过 → 过拟合;都过 → 鲁棒加分 |
-| SE-6 S2 ATR multiple | {1.5, 2.0, 2.5, 3.0} | 同 SE-5 |
+| ~~SE-5 S2 lookback~~ | DEFERRED with S2 | — |
+| ~~SE-6 S2 ATR multiple~~ | 已在 Plan 2c 前置执行,结论触发 S2 deferral;详见 findings 文档 | — |
 
 **剔除的实验:**
 - "仅交易 gap > X 的日子" —— data mining 风险;不加
@@ -386,7 +391,7 @@ daytrader research bakeoff promote --verdict-id <id>
 | ID | 风险 | 缓解 |
 |---|---|---|
 | R1 | MES 连续合约 rollover 产生假突破 | 用 Databento `continuous` schema 的 `c-1` 定义(ranked by open interest),提取官方 rollover 日期列表;rollover 日及前 1 日 skip 不交易(不仅是 skip 交易,还从 pure OOS 计数里排除) |
-| R2 | S2 "dynamic trailing stop" 公式误解 | (a) SPY known-answer 测试必过;(b) SE-5/SE-6 可检参数依赖;(c) 失败回退问作者 |
+| ~~R2~~ | ~~S2 "dynamic trailing stop" 公式误解~~ | **Deferred with S2.** Plan 2c 的 ATR 扫描已前置排查,结论是 entry 信号本身无 edge(无论 stop 距离),而非公式误解。S2 不进 Plan 3。 |
 | R3 | RTH 缺 bar | 缺失 > 1% 的日整天剔除 |
 | R4 | 成本模型失准 | SE-1 cost × {0, 1, 2} 强制通过 |
 | R5 | pybroker 小众单一维护者 | 保存 raw trade parquet 可替换引擎 replay;策略类只依赖 pandas + numpy |
@@ -397,20 +402,21 @@ daytrader research bakeoff promote --verdict-id <id>
 
 ### 5.3 里程碑
 
-| M | 产出 | 估时 | 人工 checkpoint |
+| M | 产出 | 估时 | 状态 |
 |---|---|---|---|
-| M1 | `research.bakeoff.data` + Databento 下载 + 质检 + 单元测试 | 2-3 天 | 看质检报告:缺 bar 率、rollover 计数、TZ 校验 |
-| M2 | 成本模型 + baseline buy-and-hold 验证 | 1 天 | 基线 Sharpe ≈ MES 真实 0.5,否则框架有 bug |
-| M3 | **S1a 实现 + SPY 上 Zarattini 2023 known-answer** | 2-3 天 | **gate:复现偏差 < 15% 才继续** |
-| M4 | S1b / S2a / S2b + 各自 known-answer | 3-4 天 | 同 M3 |
-| M5 | 评估框架:metrics + DSR + bootstrap + 报告器 | 2-3 天 | 合成"已知 Sharpe"数据喂入验证 |
-| M6 | **主 bake-off MES 2022-2025 × 4 候选** | 0.5-1 天跑 + 0.5 天读 | **冻结 git tag `bakeoff-run-1`** |
-| M7 | 6 个敏感性实验 | 1-2 天 | 看是否动摇 M6 结论 |
-| M8 | `promote` CLI + YAML v2 + Contract.md 填写指南 | 1-2 天 | **最终决定:签哪个 Contract,或不签** |
+| M1 | `research.bakeoff.data` + Databento 下载 + 质检 + 单元测试 | 2-3 天 | **Done** (Plan 2a,commit `4a2a646`) |
+| M2 | 成本模型 + baseline buy-and-hold 验证 | 1 天 | Plan 3(待启动) |
+| M3 | **S1a 实现 + SPY 上 Zarattini 2023 known-answer** | 2-3 天 | **Done** (Plan 2a;PR #1) |
+| M4a | S1b + KAT | 同 M3 | **Done** (Plan 2a) |
+| ~~M4b~~ | ~~S2a / S2b + KAT~~ | Code done (Plan 2b);strategies **deferred** per Plan 2c | KAT skipped by default |
+| M5 | 评估框架:metrics + DSR + bootstrap + 报告器 | 2-3 天 | Plan 3 |
+| M6 | **主 bake-off SPY 2018-05 → 2024-12 × 2 活跃候选** | 0.5-1 天跑 + 0.5 天读 | Plan 3;**冻结 git tag `bakeoff-run-1`** |
+| M7 | 4 个敏感性实验(SE-1 到 SE-4;SE-5/6 deferred with S2) | 1-2 天 | Plan 3 |
+| M8 | `promote` CLI + YAML v2 + Contract.md 填写指南 | 1-2 天 | Plan 3;**最终决定:签哪个 Contract,或不签** |
 
-**总计 13-20 工作日(2-4 日历周)。**
+**剩余估时:7-11 工作日(1.5-2 日历周)** —— M1/M3/M4a 已完成。
 
-用户侧工作:M1 下 Databento 订单 + 付款;M3/M4 若复现失败协助决策;M6-M8 读报告做签约决定。
+用户侧剩余工作:M6-M8 读报告做签约决定。
 
 ### 5.4 退出条件(何时认定方案失败)
 
