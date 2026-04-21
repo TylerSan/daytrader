@@ -43,6 +43,11 @@ def test_spy_loader_cache_miss_calls_databento(tmp_path, mock_spy_client):
     df = loader.load(date(2024, 6, 10), date(2024, 6, 10))
     assert len(df) == 2
     mock_spy_client.timeseries.get_range.assert_called_once()
+    # Locks in ARCX.PILLAR as the SPY 1m data source (NYSE Arca is SPY's
+    # primary listing venue; history back to 2018-05-01).
+    kwargs = mock_spy_client.timeseries.get_range.call_args.kwargs
+    assert kwargs["dataset"] == "ARCX.PILLAR"
+    assert kwargs["schema"] == "ohlcv-1m"
 
 
 def test_spy_loader_cache_hit_skips_databento(tmp_path, mock_spy_client):
