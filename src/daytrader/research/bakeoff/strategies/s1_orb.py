@@ -57,6 +57,16 @@ def _build_trade_from_day(
     else:
         stop_price = or_.high
 
+    # Wrong-way-entry guard: OR direction says long but post-OR bar already
+    # closed at or below OR low (or short with close at/above OR high) →
+    # entry <= stop, trade makes no sense. Skip silently. Without this guard,
+    # a "STOP outcome" at stop_price > entry_price would be recorded as a
+    # winning trade, inflating win rate.
+    if direction == "long" and entry_price <= stop_price:
+        return []
+    if direction == "short" and entry_price >= stop_price:
+        return []
+
     target_price = target_price_fn(or_, direction, entry_price)
 
     bars_from_entry = day_bars.iloc[or_minutes:]
