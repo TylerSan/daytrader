@@ -97,6 +97,7 @@ def walk_forward_with_trailing(
     initial_stop: float,
     atr_14_d: float,
     eod_cutoff_ts: pd.Timestamp,
+    atr_multiplier: float = 2.0,
 ) -> ExitInfo:
     stop = initial_stop
 
@@ -113,7 +114,7 @@ def walk_forward_with_trailing(
                     exit_price=stop,
                     outcome=TradeOutcome.STOP,
                 )
-            candidate = hi - 2.0 * atr_14_d
+            candidate = hi - atr_multiplier * atr_14_d
             if candidate > stop:
                 stop = candidate
         else:
@@ -123,7 +124,7 @@ def walk_forward_with_trailing(
                     exit_price=stop,
                     outcome=TradeOutcome.STOP,
                 )
-            candidate = lo + 2.0 * atr_14_d
+            candidate = lo + atr_multiplier * atr_14_d
             if candidate < stop:
                 stop = candidate
 

@@ -246,3 +246,32 @@ def test_trailing_initial_stop_hits_on_first_bar():
     )
     assert exit.outcome is TradeOutcome.STOP
     assert exit.exit_price == pytest.approx(96.0)
+
+
+def test_trailing_respects_atr_multiplier():
+    """atr_multiplier scales the trailing candidate: hi - mult*ATR for long."""
+    post = _intraday("2024-06-10", [
+        ("10:00", 100, 100, 100, 100),
+        ("10:01", 100, 110, 100, 110),
+        ("10:02", 110, 110, 104, 105),
+        ("15:55", 105, 106, 104, 106),
+    ])
+    # mult=1.0 → after 10:01 stop=110-2=108. 10:02 low=104<=108 → STOP at 108.
+    exit_tight = walk_forward_with_trailing(
+        bars_after_entry=post, direction="long",
+        entry_price=100.0, initial_stop=96.0,
+        atr_14_d=2.0, eod_cutoff_ts=post.index[-1],
+        atr_multiplier=1.0,
+    )
+    assert exit_tight.outcome is TradeOutcome.STOP
+    assert exit_tight.exit_price == pytest.approx(108.0)
+
+    # mult=3.0 → after 10:01 stop=110-6=104. 10:02 low=104<=104 → STOP at 104.
+    exit_loose = walk_forward_with_trailing(
+        bars_after_entry=post, direction="long",
+        entry_price=100.0, initial_stop=96.0,
+        atr_14_d=2.0, eod_cutoff_ts=post.index[-1],
+        atr_multiplier=3.0,
+    )
+    assert exit_loose.outcome is TradeOutcome.STOP
+    assert exit_loose.exit_price == pytest.approx(104.0)
