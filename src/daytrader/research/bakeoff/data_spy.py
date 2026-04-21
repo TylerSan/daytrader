@@ -3,10 +3,20 @@
 Parallel to `data.py` but for an equity ETF. Key differences:
 - No continuous contract — SPY is SPY.
 - No rollover detection.
-- Dataset is equities (DBEQ.BASIC or XNAS.ITCH) not GLBX.MDP3.
+- Dataset is equities (ARCX.PILLAR — NYSE Arca, SPY's primary listing venue)
+  rather than the GLBX.MDP3 futures feed used for MES.
+
+Originally used DBEQ.BASIC (2023-03-28+) but switched to ARCX.PILLAR
+because (a) it's the authoritative SPY venue matching Zarattini paper's
+implicit methodology, (b) it has history back to 2018-05-01 enabling
+literal paper replication instead of the narrower 2023 window, (c) it's
+single-publisher so no multi-venue consolidation is needed, and (d) it's
+the same dataset as data_spy_daily.py.
 
 RTH semantics, quality report, and cache layout are identical to the
-MES loader, to keep the two loaders ergonomically parallel.
+MES loader, to keep the two loaders ergonomically parallel. ARCX.PILLAR
+returns extended-hours bars (04:00-20:00 ET, ~960 bars/day); filter_rth
+crops to the 09:30-15:59 RTH window (390 bars/day).
 """
 
 from __future__ import annotations
@@ -20,7 +30,7 @@ import pandas as pd
 from daytrader.research.bakeoff.data import filter_rth, data_quality_report
 
 
-_SPY_DATASET = "DBEQ.BASIC"
+_SPY_DATASET = "ARCX.PILLAR"
 
 
 @dataclass
