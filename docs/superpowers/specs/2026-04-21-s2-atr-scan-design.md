@@ -50,24 +50,49 @@ For each `(atr_multiplier, strategy)` cell:
 | `win_rate` | Shape of per-trade outcome distribution |
 | `avg_R` | Per-trade expected value |
 | `total_pnl_usd` | Gross edge (on $10k starting capital, $1/point) |
-| `stop_hit_rate` | Fraction of trades exited via STOP (not EOD) — the key degeneracy driver |
+| `stop_hit_rate` | Fraction of trades exited via STOP (not EOD) — key degeneracy driver |
 | `long_count / short_count` | Direction balance |
+| `avg_mfe_R` | Average Maximum Favorable Excursion from entry, in R units. Diagnostic: is the entry *signal* any good (positive MFE) or is the entry also noise? Separates "entry good, exit bad" from "everything bad". |
+| `avg_mae_R` | Average Maximum Adverse Excursion. Used with MFE to characterize the profile of held trades. |
+
+MFE/MAE computed bar-by-bar from entry to actual exit. For a long trade: `MFE = max(high during hold) − entry`; `MAE = entry − min(low during hold)`. Normalized by `risk = |entry − initial_stop|` to get R units.
 
 Plus derived across S2a vs S2b:
 - `trade_count_delta`: `len(S2b) − len(S2a)`
 - `pnl_delta`: `S2b PnL − S2a PnL`
 
-### 3.4 Decision framework (findings document)
+### 3.4 Regime stratification (per-year)
 
-After the scan, the findings doc commits to one of three decisions:
+For each `(atr_multiplier, strategy)` cell, additionally break out by calendar year (2018H2, 2019, 2020, 2021, 2022, 2023) the following:
 
-| Condition | Decision |
+| Metric | Why |
 |---|---|
-| At 2.0 multiplier, S2a≡S2b is confirmed AS INTENDED, AND no other multiplier produces positive edge → | **Keep canonical 2×ATR.** Plan 3 proceeds with S2 as-is; S2a/S2b redundancy documented as dataset property not bug. |
-| Some multiplier M produces meaningful S2a ≠ S2b AND positive avg_R > +0.05 on full window → | **Change canonical to M×ATR** in a separate spec-revision PR. If multiple multipliers qualify, pick the one with highest avg_R; if tied, pick the smaller M (tighter stop = smaller risk per trade, closer to ensemble of earlier Zarattini conventions). S2 KATs re-calibrate. |
-| No multiplier produces positive edge, AND S2a ≈ S2b across all multipliers (stops structurally don't help) → | **Flag S2 rules for redesign.** Separate follow-up to explore different exit mechanisms (MFE-based, time-based, etc.). S2 stays in Plan 3 but with a loud caveat. |
+| `n_trades` per year | Check trading frequency is regime-stable |
+| `avg_R` per year | Detect if edge (or anti-edge) is concentrated in one regime |
+| `total_pnl_usd` per year | Same for PnL sign |
 
-The scan's result, not our prior opinion, picks the branch. If the three conditions don't cleanly partition, the findings doc says so and proposes next steps.
+2020 was a vol shock (COVID), 2022 was a bear, 2023 was a reflation rally — aggregate numbers hide regime-specific behavior. If avg_R is positive only in 2020, that's a vol-regime-dependent edge, not a structural one. Decision framework below uses this breakdown.
+
+### 3.5 Decision framework (findings document)
+
+Pre-committed definitions (evaluated on the full 2018-05 → 2023-12 window):
+
+- **"Meaningful S2a ≠ S2b"**: `trade_count_delta / len(S2a) ≥ 0.10` (i.e. S2b generates at least 10% more trades than S2a). Current 2×ATR canonical is 0.5%, clearly fails this.
+- **"Positive gross edge"**: `avg_R > 0` AND `total_pnl_usd > 0`. This is a diagnostic floor, not a hard-gate bar. avg_R of +0.05 (≈ S1a's level) produces ~0.1%/year gross, which is noise after transaction costs — Plan 3's spec §2.4 hard gates do the real screening. Here we only want to know "does any multiplier escape negative territory".
+- **"Regime-stable edge"**: `avg_R > 0` in at least 4 of the 6 calendar-year buckets. Catches 2020-only vol-regime flukes.
+- **"Entry signal quality"**: `avg_mfe_R` consistently ≥ 1.0 across multipliers (MFE exceeds 1R on average). If true, entries touch meaningful favorable moves — exit is the degeneracy driver. If false across all multipliers, the boundary trigger itself is noise.
+
+Decision table (check in order — first matching row wins):
+
+| # | Condition | Decision |
+|---|---|---|
+| 1 | NO multiplier produces positive gross edge AND `avg_mfe_R < 1.0` universally | **Flag S2 rules for redesign.** Entry signal has no reach; exit fix won't save it. Separate follow-up spec. S2 stays in Plan 3 only with a loud caveat. |
+| 2 | Some multiplier M produces meaningful S2a ≠ S2b AND positive gross edge AND regime-stable edge | **Change canonical to M×ATR** in a separate spec-revision PR. Tie-break: highest avg_R; if still tied, smaller M (tighter risk). S2 KATs re-calibrate. |
+| 3 | Positive edge at some M but S2a ≡ S2b at all scanned multipliers (entry has edge; stop does not differentiate) | **Keep canonical 2×ATR BUT merge S2a and S2b into one candidate in Plan 3** (per-day cap has no effect on this dataset). Plan 3's n_trials drops from 4 to 3. Document as dataset property. |
+| 4 | S2a ≡ S2b at 2.0 AND no multiplier produces positive edge | **Keep canonical 2×ATR as-is, mark S2 as likely R1/R2 failure.** Plan 3 runs the 4 candidates, fully expects S2 to fail hard gates, proceeds to spec §2.5 failure conclusion if appropriate. |
+| 5 | None of the above (e.g., mixed signals, partial fits) | **Findings doc enumerates the ambiguity, proposes next diagnostic**, does NOT silently pick a branch. |
+
+The framework is evaluated **once** after running, following the table from top to bottom. No partial-window cherry-picking.
 
 ## 4. Implementation
 
@@ -82,6 +107,7 @@ The scan's result, not our prior opinion, picks the branch. If the three conditi
 
 **Tests:**
 - New unit test: `test_s2_atr_multiplier_affects_stop_distance` — same bars, three multipliers (1.0, 2.0, 3.0), assert `initial_stop` distance scales linearly.
+- New unit test: `test_compute_mfe_mae` — fixture with a known intraday path, assert MFE/MAE numbers match hand-computed expectations.
 - Existing tests (default `atr_multiplier=2.0`) stay green.
 - Existing S2 KATs stay green.
 
@@ -92,8 +118,10 @@ The scan's result, not our prior opinion, picks the branch. If the three conditi
 Single-file Python script. Structure:
 1. Load cached SPY 1m + daily for 2018-05 → 2023-12.
 2. Loop 5 multipliers × 2 strategies → 10 runs.
-3. Collect metrics per run.
-4. Write markdown table to stdout + CSV to `docs/research/bakeoff/s2_atr_scan_results.csv`.
+3. For each run, collect §3.3 summary metrics AND §3.4 per-year breakdown AND MFE/MAE (computed post-hoc by looking up each trade's held 1m bars in the cache — no strategy-class changes needed for this).
+4. Write markdown summary table to stdout; CSV with full metrics (one row per `(multiplier, strategy)` for summary and one per `(multiplier, strategy, year)` for stratification) to `docs/research/bakeoff/s2_atr_scan_results.csv` + `_by_year.csv`.
+
+MFE/MAE helper function lives in the script (not the strategy package) since it's scan-specific and doesn't belong in the strategy's wire format. Unit-tested alongside.
 
 No new dependencies (pandas already present). Runtime < 2 min.
 
@@ -102,19 +130,22 @@ No new dependencies (pandas already present). Runtime < 2 min.
 **`docs/research/bakeoff/2026-04-21-s2-atr-scan-findings.md`:**
 
 Structure:
-- **TL;DR** — one-sentence decision (filled in after running, per §3.4 framework).
+- **TL;DR** — one-sentence decision (filled in after running, per §3.5 framework).
 - **Method** — scan params, window, data provenance (commits `26d28c7`, `2c7124f` reproducible).
-- **Results** — markdown table with all 10 rows + 2 derived-delta columns.
-- **Interpretation** — 2-3 paragraphs reading the table.
-- **Decision** — which §3.4 branch, and next action.
+- **Results** — markdown table with 10 summary rows + per-year stratification block + MFE/MAE columns.
+- **Interpretation** — 2-3 paragraphs reading the tables.
+- **Decision** — which §3.5 branch, and next action.
 
 ## 5. File Structure
 
 ```
 Create:
   scripts/bakeoff_s2_atr_scan.py
+  scripts/_s2_scan_mfe_mae.py                                (helper, importable by runner + tests)
+  tests/scripts/test_s2_scan_mfe_mae.py                      (unit test for MFE/MAE helper)
   docs/research/bakeoff/2026-04-21-s2-atr-scan-findings.md
-  docs/research/bakeoff/s2_atr_scan_results.csv              (generated by runner)
+  docs/research/bakeoff/s2_atr_scan_results.csv              (generated by runner — committed for review)
+  docs/research/bakeoff/s2_atr_scan_results_by_year.csv      (generated by runner — committed for review)
 
 Modify:
   src/daytrader/research/bakeoff/strategies/_s2_core.py          (add atr_multiplier param)
@@ -122,24 +153,32 @@ Modify:
   tests/research/bakeoff/strategies/test_s2_core.py              (1 new test)
 ```
 
+Generated CSVs are committed to the repo (not gitignored) so the findings doc is self-contained and reproducible from git history alone.
+
 No spec revisions in this plan. If the findings doc concludes "change canonical to M×ATR", that triggers a separate spec-revision PR.
 
 ## 6. Success Criteria
 
 Plan 2c is done when:
 
-1. Full unit suite green (existing 227 passed + new 1 = 228).
-2. Live scan runs to completion on SPY 2018-2023 cache, producing the 10-row table.
-3. Findings document committed with explicit **Decision** from §3.4's three branches.
-4. If decision = "Keep canonical", Plan 3 proceeds unchanged. If decision = "Change to M×ATR", a follow-up spec-revision PR revises §3.3 and S2 KATs before Plan 3 starts. If decision = "Redesign S2", Plan 3 is gated on that redesign.
+1. Full unit suite green: existing 227 passed + 2 new tests (atr_multiplier, MFE/MAE helper) = 229 passed.
+2. Live scan runs to completion on SPY 2018-05 → 2023-12 cache, producing both summary and by-year CSVs.
+3. Findings document committed with explicit **Decision** from §3.5's five branches (including branch 5 "enumerate ambiguity" if the scan doesn't cleanly partition).
+4. Next action clearly stated in the findings doc:
+   - Branch 1 (redesign) → separate design spec before Plan 3 starts; Plan 3 gated.
+   - Branch 2 (change M) → separate spec-revision PR revises spec §3.3 + re-calibrates S2 KATs; then Plan 3.
+   - Branch 3 (merge S2a/S2b) → separate spec-revision PR drops one of S2a/S2b; Plan 3 starts with 3 candidates, n_trials=3.
+   - Branch 4 (keep as-is, expect failure) → Plan 3 starts unchanged; S2 expected to fail hard gates.
+   - Branch 5 (ambiguous) → followup diagnostic plan; Plan 3 gated.
 
 ## 7. Risks
 
 | # | Risk | Mitigation |
 |---|---|---|
-| R-2c-1 | Scan results look "cherry-pickable" — some multiplier shows mild positive edge that could be p-hacked into the canonical rule | Decision framework in §3.4 is pre-committed. "Positive edge" threshold is avg_R > +0.05 across full window. No partial-window tuning. |
+| R-2c-1 | Scan results look "cherry-pickable" — some multiplier shows mild positive edge that could be p-hacked into the canonical rule | Decision framework in §3.5 is pre-committed and this spec is committed *before* the scan runs. "Positive edge" is `avg_R > 0` AND `total_pnl_usd > 0` AND regime-stable (4 of 6 years). No partial-window tuning. Plan 3's hard-gate bar is the real selection filter, not this diagnostic. |
 | R-2c-2 | `atr_multiplier` parameter refactor breaks existing S2 KATs | Default stays 2.0; KATs verify bit-for-bit equivalence. Refactor is TDD'd. |
-| R-2c-3 | 2c delays Plan 3 indefinitely if scan suggests redesign | Time-box: if §3.4's third branch triggers, write the redesign spec immediately; don't start Plan 3 on broken rules. This is a feature not a bug. |
+| R-2c-3 | 2c delays Plan 3 if scan suggests redesign (branch 1 or 5) | Time-box to 3 calendar days of work after the scan runs. If a full redesign is needed and can't be scoped in 3 days, Plan 3 starts with 4 candidates as-is and an explicit "S2 under review" caveat in its findings. |
+| R-2c-4 | Train-on-test concern if branch 2 fires and M is chosen from the same window it's later evaluated on | Mitigated by: (a) decision framework requires regime-stable edge across 6 years, not overall average; (b) Plan 3's pure OOS (2024-04+) is the independent check; (c) if branch 2 fires we commit to the M before running Plan 3, no re-tuning. |
 
 ## 8. Not in scope
 
