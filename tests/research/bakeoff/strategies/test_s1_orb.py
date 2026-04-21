@@ -120,6 +120,59 @@ def test_s1b_stops_trump_eod():
     assert trades[0].exit_price == pytest.approx(4998.0)
 
 
+def test_s1a_skips_wrong_way_long_entry_below_or_low():
+    """If direction=long (OR close > OR open) but post-OR bar closes AT OR
+    BELOW OR low, entry <= stop — nonsense long. Must skip (no trade)."""
+    bars = _one_day_bars([
+        ("09:30", 5000, 5005, 4998, 5002),
+        ("09:31", 5002, 5008, 5001, 5006),
+        ("09:32", 5006, 5010, 5004, 5004),
+        ("09:33", 5004, 5007, 5003, 5007),
+        ("09:34", 5007, 5009, 5000, 5008),   # OR close 5008 > open 5000 → long
+        # Post-OR bar gaps down and closes at 4995 (< OR low 4998).
+        ("09:35", 5000, 5002, 4994, 4995),
+        ("15:59", 4995, 4997, 4993, 4994),
+    ])
+    strat = S1a_ORB_TargetAndEOD(symbol="MES", or_minutes=5, target_multiple=10.0)
+    assert strat.generate_trades(bars) == []
+    strat_b = S1b_ORB_EODOnly(symbol="MES", or_minutes=5)
+    assert strat_b.generate_trades(bars) == []
+
+
+def test_s1a_skips_wrong_way_short_entry_above_or_high():
+    """Mirror: direction=short but post-OR close >= OR high → skip."""
+    bars = _one_day_bars([
+        ("09:30", 5000, 5002, 4990, 4992),
+        ("09:31", 4992, 4993, 4985, 4988),
+        ("09:32", 4988, 4990, 4982, 4984),
+        ("09:33", 4984, 4985, 4980, 4982),
+        ("09:34", 4982, 4983, 4975, 4978),   # OR close 4978 < open 5000 → short
+        # Post-OR bar gaps UP above OR high 5002.
+        ("09:35", 4978, 5010, 4977, 5005),   # close 5005 >= OR high 5002
+        ("15:59", 5005, 5008, 5003, 5007),
+    ])
+    strat = S1a_ORB_TargetAndEOD(symbol="MES", or_minutes=5, target_multiple=10.0)
+    assert strat.generate_trades(bars) == []
+
+
+def test_s1a_accepts_long_entry_exactly_above_or_low():
+    """Boundary: entry strictly > OR low → valid long trade."""
+    bars = _one_day_bars([
+        ("09:30", 5000, 5005, 4998, 5002),
+        ("09:31", 5002, 5008, 5001, 5006),
+        ("09:32", 5006, 5010, 5004, 5004),
+        ("09:33", 5004, 5007, 5003, 5007),
+        ("09:34", 5007, 5009, 5000, 5008),
+        # Post-OR close at 4999 — just above OR low 4998 → entry > stop, valid.
+        ("09:35", 5000, 5005, 4997, 4999),
+        ("15:59", 4999, 5001, 4996, 4998),   # EOD just barely below entry → loss
+    ])
+    strat = S1a_ORB_TargetAndEOD(symbol="MES", or_minutes=5, target_multiple=10.0)
+    trades = strat.generate_trades(bars)
+    assert len(trades) == 1
+    assert trades[0].entry_price == pytest.approx(4999.0)
+
+
 def _multiday_bars(days):
     frames = []
     for d_str, rows in days:
