@@ -46,6 +46,7 @@ def _run_day(
     atr_14_d: float,
     avg_intra_row: pd.Series,
     max_trades: int,
+    atr_multiplier: float,
 ) -> list[Trade]:
     if (
         np.isnan(atr_14_d)
@@ -101,9 +102,9 @@ def _run_day(
 
         entry_price = price
         if direction == "long":
-            initial_stop = entry_price - 2.0 * atr_14_d
+            initial_stop = entry_price - atr_multiplier * atr_14_d
         else:
-            initial_stop = entry_price + 2.0 * atr_14_d
+            initial_stop = entry_price + atr_multiplier * atr_14_d
 
         bars_after = day_bars_1m.iloc[ct_idx : eod_idx + 1]
         if len(bars_after) < 2:
@@ -116,6 +117,7 @@ def _run_day(
             initial_stop=initial_stop,
             atr_14_d=atr_14_d,
             eod_cutoff_ts=eod_ts,
+            atr_multiplier=atr_multiplier,
         )
 
         if exit_info.exit_time == eod_ts.to_pydatetime():
@@ -153,6 +155,7 @@ def _generate(
     bars_1m: pd.DataFrame,
     bars_1d: pd.DataFrame,
     max_trades: int,
+    atr_multiplier: float,
 ) -> list[Trade]:
     atr_series = atr_14(bars_1d)
     avg_intra = avg_intraday_return_14d(
@@ -191,6 +194,7 @@ def _generate(
             atr_14_d=atr_d,
             avg_intra_row=avg_row,
             max_trades=max_trades,
+            atr_multiplier=atr_multiplier,
         ))
 
     return out
@@ -200,19 +204,27 @@ def _generate(
 class S2a_IntradayMomentum_Max1:
     """S2a: max 1 trade per day (conservative). Per spec §3.3 + §3.6."""
     symbol: str
+    atr_multiplier: float = 2.0
 
     def generate_trades(
         self, bars_1m: pd.DataFrame, bars_1d: pd.DataFrame
     ) -> list[Trade]:
-        return _generate(self.symbol, bars_1m, bars_1d, max_trades=1)
+        return _generate(
+            self.symbol, bars_1m, bars_1d,
+            max_trades=1, atr_multiplier=self.atr_multiplier,
+        )
 
 
 @dataclass
 class S2b_IntradayMomentum_Max5:
     """S2b: max 5 trades per day (Contract ceiling, close to paper intent)."""
     symbol: str
+    atr_multiplier: float = 2.0
 
     def generate_trades(
         self, bars_1m: pd.DataFrame, bars_1d: pd.DataFrame
     ) -> list[Trade]:
-        return _generate(self.symbol, bars_1m, bars_1d, max_trades=5)
+        return _generate(
+            self.symbol, bars_1m, bars_1d,
+            max_trades=5, atr_multiplier=self.atr_multiplier,
+        )
