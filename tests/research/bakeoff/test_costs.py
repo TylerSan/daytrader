@@ -72,3 +72,54 @@ def test_round_trip_cost_eod_exit_treated_as_target():
 def test_round_trip_cost_unknown_exit_kind_raises():
     with pytest.raises(ValueError, match="exit_kind"):
         round_trip_cost_usd(contracts=1, exit_kind="bogus")
+
+
+# --- Plan 3 per-trade cost helpers (SPY, point-unit) ---
+
+from datetime import datetime, timezone
+
+from daytrader.research.bakeoff.costs import (
+    apply_per_trade_cost, trade_gross_pnl, trade_net_pnl,
+)
+from daytrader.research.bakeoff.strategies._trade import Trade, TradeOutcome
+
+
+def _p3_trade(direction, entry_price, exit_price):
+    ts = datetime(2024, 6, 10, 13, 35, tzinfo=timezone.utc)
+    stop = entry_price - 10 if direction == "long" else entry_price + 10
+    return Trade(
+        date="2024-06-10", symbol="SPY", direction=direction,
+        entry_time=ts, entry_price=entry_price,
+        stop_price=stop, target_price=float("nan"),
+        exit_time=ts, exit_price=exit_price,
+        outcome=TradeOutcome.EOD, r_multiple=0.0,
+    )
+
+
+def test_trade_gross_pnl_long():
+    assert trade_gross_pnl(_p3_trade("long", 100.0, 105.0)) == pytest.approx(5.0)
+
+
+def test_trade_gross_pnl_short():
+    assert trade_gross_pnl(_p3_trade("short", 100.0, 95.0)) == pytest.approx(5.0)
+
+
+def test_trade_net_pnl_subtracts_cost():
+    assert trade_net_pnl(_p3_trade("long", 100.0, 105.0), cost_per_trade=0.5) == pytest.approx(4.5)
+
+
+def test_apply_per_trade_cost_returns_series_of_net_pnl():
+    trades = [
+        _p3_trade("long", 100.0, 105.0),
+        _p3_trade("long", 100.0, 98.0),
+        _p3_trade("short", 100.0, 95.0),
+    ]
+    nets = apply_per_trade_cost(trades, cost_per_trade=0.5)
+    assert list(nets) == pytest.approx([4.5, -2.5, 4.5])
+
+
+def test_apply_per_trade_cost_zero_cost_matches_gross():
+    trades = [_p3_trade("long", 100.0, 105.0), _p3_trade("short", 100.0, 95.0)]
+    gross = [trade_gross_pnl(t) for t in trades]
+    net = list(apply_per_trade_cost(trades, cost_per_trade=0.0))
+    assert net == pytest.approx(gross)
