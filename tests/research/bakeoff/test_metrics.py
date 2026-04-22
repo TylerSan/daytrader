@@ -104,3 +104,46 @@ def test_profit_factor_mixed():
 def test_expectancy_r_mean_of_r_multiples():
     r = pd.Series([1.0, -1.0, 0.5, -0.5])
     assert expectancy_r(r) == pytest.approx(0.0)
+
+
+# --- DSR + bootstrap CI ---
+
+from daytrader.research.bakeoff.metrics import (
+    bootstrap_sharpe_ci, deflated_sharpe_pvalue,
+)
+
+
+def test_dsr_pvalue_zero_sharpe_always_high():
+    returns = pd.Series([0.001, -0.001] * 126)
+    p = deflated_sharpe_pvalue(returns, n_trials=2)
+    assert p > 0.4
+
+
+def test_dsr_pvalue_very_high_sharpe_is_significant():
+    # Realistic high-SR series with noise so skew/kurt stay well-behaved.
+    np.random.seed(7)
+    returns = pd.Series(np.random.normal(0.002, 0.005, 500))   # SR ≈ +6.3 annualized
+    p = deflated_sharpe_pvalue(returns, n_trials=2)
+    assert p < 0.05
+
+
+def test_dsr_pvalue_more_trials_makes_harder_to_pass():
+    np.random.seed(11)
+    returns = pd.Series(np.random.normal(0.0008, 0.01, 500))   # mild positive SR
+    p2 = deflated_sharpe_pvalue(returns, n_trials=2)
+    p100 = deflated_sharpe_pvalue(returns, n_trials=100)
+    assert p100 >= p2
+
+
+def test_bootstrap_sharpe_ci_zero_mean_brackets_zero():
+    np.random.seed(42)
+    returns = pd.Series(np.random.normal(0, 0.01, 252))
+    lo, hi = bootstrap_sharpe_ci(returns, n_resamples=1000, seed=42)
+    assert lo < 0 < hi
+
+
+def test_bootstrap_sharpe_ci_positive_drift_positive_lower_bound():
+    np.random.seed(42)
+    returns = pd.Series(np.random.normal(0.005, 0.005, 500))
+    lo, hi = bootstrap_sharpe_ci(returns, n_resamples=1000, seed=42)
+    assert lo > 0

@@ -93,3 +93,75 @@ def expectancy_r(r_multiples: pd.Series) -> float:
     if len(r_multiples) == 0:
         return float("nan")
     return float(r_multiples.mean())
+
+
+# === DSR + bootstrap ===
+
+
+import numpy as np
+from scipy.stats import norm as _norm
+
+
+_EULER_MASCHERONI = 0.5772156649015329
+
+
+def _expected_max_sharpe(n_trials: int) -> float:
+    """López de Prado's expected max of n iid standard-normal Sharpes.
+    E[max] ≈ (1 - γ)·Φ⁻¹(1 - 1/n) + γ·Φ⁻¹(1 - 1/(n·e)) where γ is Euler-Mascheroni.
+    """
+    if n_trials <= 1:
+        return 0.0
+    inv1 = _norm.ppf(1 - 1.0 / n_trials)
+    inv2 = _norm.ppf(1 - 1.0 / (n_trials * math.e))
+    return (1 - _EULER_MASCHERONI) * inv1 + _EULER_MASCHERONI * inv2
+
+
+def deflated_sharpe_pvalue(
+    daily_returns: pd.Series,
+    n_trials: int,
+) -> float:
+    """Deflated Sharpe Ratio p-value (López de Prado 2014).
+
+    Tests whether the observed Sharpe is significantly greater than the
+    expected max Sharpe of `n_trials` iid null candidates. Higher n_trials
+    → harder to pass. Small p is significant.
+    """
+    T = len(daily_returns)
+    if T < 2:
+        return float("nan")
+    mean = float(daily_returns.mean())
+    std = float(daily_returns.std(ddof=1))
+    if std == 0:
+        return float("nan")
+    sr_hat = mean / std   # per-period Sharpe
+    # Skew and excess kurtosis.
+    skew = float(((daily_returns - mean) ** 3).mean() / (std ** 3))
+    kurt = float(((daily_returns - mean) ** 4).mean() / (std ** 4) - 3)
+    sr_var = (1 - skew * sr_hat + (kurt / 4) * sr_hat ** 2) / (T - 1)
+    if sr_var <= 0:
+        return float("nan")
+    sr_std = math.sqrt(sr_var)
+    exp_max_sr = _expected_max_sharpe(n_trials)
+    z = (sr_hat - exp_max_sr * sr_std) / sr_std
+    return float(1 - _norm.cdf(z))
+
+
+def bootstrap_sharpe_ci(
+    daily_returns: pd.Series,
+    n_resamples: int = 10_000,
+    confidence: float = 0.95,
+    seed: int | None = None,
+) -> tuple[float, float]:
+    """Percentile bootstrap CI for annualized Sharpe."""
+    rng = np.random.default_rng(seed)
+    n = len(daily_returns)
+    values = daily_returns.to_numpy()
+    sharpes = np.empty(n_resamples)
+    for i in range(n_resamples):
+        sample = rng.choice(values, size=n, replace=True)
+        mean = sample.mean()
+        std = sample.std(ddof=1)
+        sharpes[i] = (mean / std * math.sqrt(TRADING_DAYS_PER_YEAR)) if std > 0 else 0.0
+    lo_q = (1 - confidence) / 2
+    hi_q = 1 - lo_q
+    return float(np.quantile(sharpes, lo_q)), float(np.quantile(sharpes, hi_q))
