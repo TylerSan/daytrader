@@ -11,6 +11,7 @@ See spec §4.4 for full schema.
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 _SCHEMA = """
@@ -123,3 +124,78 @@ class StateDB:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+
+    # --- reports table ---
+
+    def insert_report(
+        self,
+        report_type: str,
+        date_et: str,
+        time_pt: str,
+        time_et: str,
+        status: str,
+        created_at: datetime,
+    ) -> int:
+        """Insert a pending/in-progress report row, return its id."""
+        conn = self._get_conn()
+        cur = conn.execute(
+            """INSERT INTO reports
+               (report_type, date, time_pt, time_et, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (report_type, date_et, time_pt, time_et, status,
+             created_at.isoformat()),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+    def get_report_by_id(self, report_id: int) -> sqlite3.Row | None:
+        conn = self._get_conn()
+        return conn.execute(
+            "SELECT * FROM reports WHERE id = ?", (report_id,)
+        ).fetchone()
+
+    def update_report_status(
+        self,
+        report_id: int,
+        status: str,
+        obsidian_path: str | None = None,
+        pdf_path: str | None = None,
+        telegram_msg_ids: str | None = None,
+        failure_reason: str | None = None,
+        tokens_input: int | None = None,
+        tokens_output: int | None = None,
+        cache_hit_rate: float | None = None,
+        duration_seconds: float | None = None,
+        estimated_cost_usd: float | None = None,
+    ) -> None:
+        """Update status and metrics for an existing report row."""
+        conn = self._get_conn()
+        conn.execute(
+            """UPDATE reports SET
+                 status = ?,
+                 obsidian_path = COALESCE(?, obsidian_path),
+                 pdf_path = COALESCE(?, pdf_path),
+                 telegram_msg_ids = COALESCE(?, telegram_msg_ids),
+                 failure_reason = COALESCE(?, failure_reason),
+                 tokens_input = COALESCE(?, tokens_input),
+                 tokens_output = COALESCE(?, tokens_output),
+                 cache_hit_rate = COALESCE(?, cache_hit_rate),
+                 duration_seconds = COALESCE(?, duration_seconds),
+                 estimated_cost_usd = COALESCE(?, estimated_cost_usd)
+               WHERE id = ?""",
+            (status, obsidian_path, pdf_path, telegram_msg_ids,
+             failure_reason, tokens_input, tokens_output, cache_hit_rate,
+             duration_seconds, estimated_cost_usd, report_id),
+        )
+        conn.commit()
+
+    def already_generated_today(self, report_type: str, date_et: str) -> bool:
+        """Idempotency check: did a successful report of this type run today?"""
+        conn = self._get_conn()
+        row = conn.execute(
+            """SELECT 1 FROM reports
+               WHERE report_type = ? AND date = ? AND status = 'success'
+               LIMIT 1""",
+            (report_type, date_et),
+        ).fetchone()
+        return row is not None
