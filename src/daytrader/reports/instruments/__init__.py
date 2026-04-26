@@ -1,0 +1,1 @@
+"""Instrument configuration loader."""

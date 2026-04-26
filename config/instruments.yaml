@@ -1,0 +1,30 @@
+# Multi-instrument futures definitions for the reports system.
+# See spec §4.6.
+
+instruments:
+  MES:
+    full_name: "Micro E-mini S&P 500"
+    underlying_index: SPX
+    cme_symbol: MES
+    typical_atr_pts: 14
+    typical_stop_pts: 8
+    typical_target_pts: 16
+    cot_commodity: "S&P 500 STOCK INDEX"
+
+  MNQ:
+    full_name: "Micro E-mini Nasdaq 100"
+    underlying_index: NDX
+    cme_symbol: MNQ
+    typical_atr_pts: 60
+    typical_stop_pts: 30
+    typical_target_pts: 60
+    cot_commodity: "NASDAQ MINI"
+
+  MGC:
+    full_name: "Micro Gold"
+    underlying_index: null
+    cme_symbol: MGC
+    typical_atr_pts: 8
+    typical_stop_pts: 5
+    typical_target_pts: 10
+    cot_commodity: "GOLD"
