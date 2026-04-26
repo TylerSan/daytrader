@@ -300,6 +300,47 @@ class StateDB:
         )
         conn.commit()
 
+    # --- lock_in_status table ---
+
+    def save_lock_in_snapshot(
+        self,
+        snapshot_at: datetime,
+        trades_done: int,
+        trades_target: int,
+        cumulative_r: float | None,
+        last_trade_date: str | None,
+        last_trade_r: float | None,
+        streak: str | None,
+        breakdown: dict[str, int],
+    ) -> None:
+        conn = self._get_conn()
+        conn.execute(
+            """INSERT OR REPLACE INTO lock_in_status
+               (snapshot_at, trades_done, trades_target, cumulative_r,
+                last_trade_date, last_trade_r, streak,
+                breakdown_mes, breakdown_mnq, breakdown_mgc)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                snapshot_at.isoformat(),
+                trades_done,
+                trades_target,
+                cumulative_r,
+                last_trade_date,
+                last_trade_r,
+                streak,
+                breakdown.get("MES", 0),
+                breakdown.get("MNQ", 0),
+                breakdown.get("MGC", 0),
+            ),
+        )
+        conn.commit()
+
+    def latest_lock_in_snapshot(self) -> sqlite3.Row | None:
+        conn = self._get_conn()
+        return conn.execute(
+            "SELECT * FROM lock_in_status ORDER BY snapshot_at DESC LIMIT 1"
+        ).fetchone()
+
     def already_generated_today(self, report_type: str, date_et: str) -> bool:
         """Idempotency check: did a successful report of this type run today?"""
         conn = self._get_conn()

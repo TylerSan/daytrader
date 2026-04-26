@@ -229,3 +229,26 @@ def test_statedb_log_failure_and_resolve(tmp_state_db):
 
     db.resolve_failure(fid, resolved_at=datetime(2026, 4, 25, 13, 30, tzinfo=timezone.utc))
     assert db.list_unresolved_failures() == []
+
+
+def test_statedb_save_lock_in_snapshot_and_latest(tmp_state_db):
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    db.save_lock_in_snapshot(
+        snapshot_at=datetime(2026, 4, 25, 13, 0, tzinfo=timezone.utc),
+        trades_done=7,
+        trades_target=30,
+        cumulative_r=1.5,
+        last_trade_date="2026-04-23",
+        last_trade_r=-0.5,
+        streak="2L1W",
+        breakdown={"MES": 4, "MNQ": 2, "MGC": 1},
+    )
+
+    latest = db.latest_lock_in_snapshot()
+    assert latest is not None
+    assert latest["trades_done"] == 7
+    assert latest["breakdown_mes"] == 4
+    assert latest["breakdown_mnq"] == 2
+    assert latest["breakdown_mgc"] == 1
