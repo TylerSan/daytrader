@@ -1353,8 +1353,11 @@ For audit by user 1-3 months from now: distinguishing "design error" from "user-
 | Lock-in counting for 3 instruments | 30 total (not per-instrument) | 0 | Accepted recommendation |
 | A.3 form for 3 instruments | Mini-A per instrument + integrated overview | 0 | Accepted recommendation |
 | Cost ceiling | ~$140-170/month accepted | 0 | Quality > cost |
+| Phase 2+ build order vs Contract.md fill | Build Phase 2-8 first; Contract.md and lock-in deferred | 1 (after Phase 1 merge milestone) | User prefers tooling momentum over decision work |
 
 **Key implication**: this system's outputs during the 30-trade lock-in include AI decision-aid content (A sections) for each of 3 instruments at every report time. PnL data from the 30 trades will reflect a mixture of (a) user's discretionary skill, (b) Contract.md's setup definitions, and (c) AI input influence. After lock-in, the user can decide whether (c) is signal or noise based on observed performance.
+
+**Build-order trade-off**: At Phase 1 merge (2026-04-25), I flagged that the actual stated next step (per project memory) was Contract.md fill + 30-trade lock-in start, not more reports infrastructure. User chose to continue Phase 2-8 build. Implication: Phase 2's C-section (plan-recheck) and Contract.md state machine (§4.5) will run against an empty/skeletal Contract.md initially; the spec's degraded-mode paths cover this, but the system will not deliver its full value until Contract.md is filled regardless of how many phases are coded.
 
 ---
 
