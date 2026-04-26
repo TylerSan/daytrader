@@ -180,3 +180,30 @@ def test_statedb_save_plan_replaces_on_same_key(tmp_state_db):
     plan = db.get_plan_for_date("2026-04-25", "MES")
     assert plan["setup_name"] == "V2"
     assert plan["entry"] == pytest.approx(5245.0)
+
+
+def test_statedb_news_seen_dedup(tmp_state_db):
+    """add_news returns True for new, False for already-seen."""
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    assert db.add_news(
+        source="anthropic-web",
+        external_id="abc123",
+        url="https://example.com/a",
+        title="FOMC raises rates",
+        published_at=datetime(2026, 4, 25, 18, 0, tzinfo=timezone.utc),
+        impact_tag="material",
+        first_seen_at=datetime(2026, 4, 25, 19, 0, tzinfo=timezone.utc),
+    ) is True
+
+    # Same news again
+    assert db.add_news(
+        source="anthropic-web",
+        external_id="abc123",
+        url="https://example.com/a",
+        title="FOMC raises rates",
+        published_at=datetime(2026, 4, 25, 18, 0, tzinfo=timezone.utc),
+        impact_tag="material",
+        first_seen_at=datetime(2026, 4, 25, 20, 0, tzinfo=timezone.utc),
+    ) is False

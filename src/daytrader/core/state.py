@@ -231,6 +231,39 @@ class StateDB:
             (date_et, instrument),
         ).fetchone()
 
+    # --- news_seen table ---
+
+    def add_news(
+        self,
+        source: str,
+        external_id: str,
+        url: str | None,
+        title: str | None,
+        published_at: datetime | None,
+        first_seen_at: datetime,
+        impact_tag: str | None = None,
+    ) -> bool:
+        """Insert news row. Returns True if new, False if (source, external_id)
+        already present."""
+        conn = self._get_conn()
+        existing = conn.execute(
+            "SELECT 1 FROM news_seen WHERE source = ? AND external_id = ? LIMIT 1",
+            (source, external_id),
+        ).fetchone()
+        if existing is not None:
+            return False
+        conn.execute(
+            """INSERT INTO news_seen
+               (source, external_id, url, title, published_at,
+                first_seen_at, impact_tag)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (source, external_id, url, title,
+             published_at.isoformat() if published_at else None,
+             first_seen_at.isoformat(), impact_tag),
+        )
+        conn.commit()
+        return True
+
     def already_generated_today(self, report_type: str, date_et: str) -> bool:
         """Idempotency check: did a successful report of this type run today?"""
         conn = self._get_conn()
