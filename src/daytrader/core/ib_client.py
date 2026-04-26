@@ -28,6 +28,16 @@ class OHLCV:
     volume: float
 
 
+@dataclass(frozen=True)
+class Snapshot:
+    """Real-time market snapshot."""
+
+    timestamp: datetime  # UTC
+    bid: float
+    ask: float
+    last: float
+
+
 _TIMEFRAME_TO_IB_BAR_SIZE: dict[str, str] = {
     "1m": "1 min",
     "15m": "15 mins",
@@ -150,3 +160,19 @@ class IBClient:
             )
             for b in ib_bars
         ]
+
+    def get_snapshot(self, symbol: str) -> Snapshot:
+        """Fetch current bid/ask/last for the front-month continuous contract."""
+        if self._ib is None or not self._ib.isConnected():
+            raise RuntimeError("IBClient is not connected; call connect() first")
+
+        from ib_insync import ContFuture
+        contract = ContFuture(symbol, "CME")
+        ticker = self._ib.reqMktData(contract, "", False, False)
+        self._ib.sleep(1)  # wait for data tick
+        return Snapshot(
+            timestamp=ticker.time or datetime.now(),
+            bid=float(ticker.bid) if ticker.bid else 0.0,
+            ask=float(ticker.ask) if ticker.ask else 0.0,
+            last=float(ticker.last) if ticker.last else 0.0,
+        )

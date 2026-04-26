@@ -103,3 +103,30 @@ def test_ibclient_get_bars_unsupported_timeframe_raises():
     client = IBClient()
     with pytest.raises(ValueError, match="Unsupported timeframe"):
         client.get_bars(symbol="MES", timeframe="3H", bars=10)
+
+
+def test_ibclient_get_snapshot_returns_current_quote(monkeypatch):
+    """get_snapshot() returns current bid/ask/last."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    fake_ticker = MagicMock()
+    fake_ticker.bid = 5246.50
+    fake_ticker.ask = 5246.75
+    fake_ticker.last = 5246.75
+    fake_ticker.time = datetime(2026, 4, 25, 14, 30, tzinfo=timezone.utc)
+
+    fake_ib.reqMktData.return_value = fake_ticker
+    fake_ib.sleep = MagicMock()
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    snap = client.get_snapshot(symbol="MES")
+
+    assert snap.bid == 5246.50
+    assert snap.ask == 5246.75
+    assert snap.last == 5246.75
