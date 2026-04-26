@@ -17,3 +17,6 @@ data/cache/
 docs/trading/Contract.md
 docs/trading/setups/*.yaml
 !docs/trading/setups/example_*.yaml
+
+# Secrets — never commit
+config/secrets.yaml
