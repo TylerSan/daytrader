@@ -75,10 +75,24 @@ def main() -> int:
             print("[run_report] (Phase 1 stub) all stages skipped")
             print("[run_report] complete")
             return 0
-        # Phase 2+ wiring lands here.
-        print(f"[run_report] report_type={args.type}")
-        print("[run_report] full pipeline not yet implemented (Phase 2+)")
-        return 0
+
+        # Phase 2: delegate to CLI run subcommand for premarket; other types
+        # surface a NotImplementedError-style exit until later phases.
+        if args.type != "premarket":
+            print(
+                f"[run_report] {args.type!r} not yet implemented (Phase 2 supports premarket only)",
+                file=sys.stderr,
+            )
+            return 4
+
+        # Use the CLI runner so the path matches `daytrader reports run`
+        import subprocess
+        cmd = [
+            sys.executable, "-m", "daytrader.cli.main",
+            "reports", "run", "--type", "premarket",
+        ]
+        completed = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
+        return completed.returncode
     finally:
         os.close(lock_fd)
 

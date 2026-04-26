@@ -117,3 +117,7 @@ journal.add_command(audit_cmd)
 from daytrader.cli.reports import reports as reports_group  # noqa: E402
 
 cli.add_command(reports_group)
+
+
+if __name__ == "__main__":
+    cli()
