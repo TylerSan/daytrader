@@ -10,6 +10,7 @@ data/tick/
 data/imports/
 data/exports/
 data/cache/
+data/locks/
 .pytest_cache/
 
 # Journal subsystem: user-authored contract + setups are not tracked.
