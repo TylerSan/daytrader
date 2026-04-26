@@ -10,6 +10,7 @@ See spec §4.4 for full schema.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -188,6 +189,47 @@ class StateDB:
              duration_seconds, estimated_cost_usd, report_id),
         )
         conn.commit()
+
+    # --- plans table ---
+
+    def save_plan(
+        self,
+        date_et: str,
+        instrument: str,
+        setup_name: str,
+        direction: str,
+        entry: float,
+        stop: float,
+        target: float,
+        r_unit_dollars: float,
+        invalidations: list[str],
+        raw_plan_text: str,
+        source_report_path: str,
+        created_at: datetime,
+    ) -> None:
+        """Insert or replace a plan for (date, instrument)."""
+        conn = self._get_conn()
+        conn.execute(
+            """INSERT OR REPLACE INTO plans
+               (date, instrument, setup_name, direction, entry, stop, target,
+                r_unit_dollars, invalidations, raw_plan_text,
+                created_at, source_report_path)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (date_et, instrument, setup_name, direction,
+             entry, stop, target, r_unit_dollars,
+             json.dumps(invalidations), raw_plan_text,
+             created_at.isoformat(), source_report_path),
+        )
+        conn.commit()
+
+    def get_plan_for_date(
+        self, date_et: str, instrument: str
+    ) -> sqlite3.Row | None:
+        conn = self._get_conn()
+        return conn.execute(
+            "SELECT * FROM plans WHERE date = ? AND instrument = ?",
+            (date_et, instrument),
+        ).fetchone()
 
     def already_generated_today(self, report_type: str, date_et: str) -> bool:
         """Idempotency check: did a successful report of this type run today?"""

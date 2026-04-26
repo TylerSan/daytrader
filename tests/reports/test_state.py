@@ -118,3 +118,65 @@ def test_statedb_already_generated_today(tmp_state_db):
 
     assert db.already_generated_today("premarket", "2026-04-25") is True
     assert db.already_generated_today("eod", "2026-04-25") is False
+
+
+import json
+
+
+def test_statedb_save_and_get_plan(tmp_state_db):
+    """save_plan + get_plan_for_date round-trip."""
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    db.save_plan(
+        date_et="2026-04-25",
+        instrument="MES",
+        setup_name="ORB long",
+        direction="long",
+        entry=5240.0,
+        stop=5232.0,
+        target=5256.0,
+        r_unit_dollars=8.0,
+        invalidations=["price < 5232", "SPY < 580", "VIX > 18"],
+        raw_plan_text="Long MES at 5240, stop 5232, target 5256.",
+        source_report_path="/path/to/premarket.md",
+        created_at=datetime(2026, 4, 25, 13, 0, tzinfo=timezone.utc),
+    )
+
+    plan = db.get_plan_for_date("2026-04-25", "MES")
+    assert plan is not None
+    assert plan["setup_name"] == "ORB long"
+    assert plan["entry"] == pytest.approx(5240.0)
+    assert json.loads(plan["invalidations"]) == [
+        "price < 5232", "SPY < 580", "VIX > 18"
+    ]
+
+
+def test_statedb_get_plan_returns_none_for_missing(tmp_state_db):
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    assert db.get_plan_for_date("2026-04-25", "MES") is None
+
+
+def test_statedb_save_plan_replaces_on_same_key(tmp_state_db):
+    """Saving same (date, instrument) twice keeps only latest."""
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    base_args = dict(
+        date_et="2026-04-25",
+        instrument="MES",
+        direction="long",
+        r_unit_dollars=8.0,
+        invalidations=[],
+        raw_plan_text="",
+        source_report_path="",
+        created_at=datetime(2026, 4, 25, 13, 0, tzinfo=timezone.utc),
+    )
+    db.save_plan(setup_name="V1", entry=5240.0, stop=5232.0, target=5256.0, **base_args)
+    db.save_plan(setup_name="V2", entry=5245.0, stop=5237.0, target=5261.0, **base_args)
+
+    plan = db.get_plan_for_date("2026-04-25", "MES")
+    assert plan["setup_name"] == "V2"
+    assert plan["entry"] == pytest.approx(5245.0)
