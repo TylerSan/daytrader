@@ -159,6 +159,19 @@ class IBClient:
         from ib_insync import ContFuture  # local import: pure Contract, no network
 
         contract = ContFuture(symbol, _exchange_for(symbol))
+        # Resolve continuous-future symbol to its actual front-month contract.
+        # Without this, reqHistoricalData times out against live TWS (the
+        # ContFuture has no conId and IB cannot route the request).
+        # Mocked tests: qualifyContracts returns a MagicMock; we keep the
+        # original contract object as a fallback when qualification yields
+        # nothing usable.
+        try:
+            qualified = self._ib.qualifyContracts(contract)
+            if qualified and hasattr(qualified[0], "conId") and qualified[0].conId:
+                contract = qualified[0]
+        except Exception:
+            pass  # fall through with the unqualified ContFuture (mock-safe)
+
         ib_bars = self._ib.reqHistoricalData(
             contract,
             endDateTime=end_time or "",
@@ -167,6 +180,7 @@ class IBClient:
             whatToShow="TRADES",
             useRTH=False,
             formatDate=2,  # UTC seconds
+            timeout=60,  # ib_insync default is 60s; explicit for clarity
         )
         result = [
             OHLCV(
@@ -194,6 +208,14 @@ class IBClient:
 
         from ib_insync import ContFuture
         contract = ContFuture(symbol, _exchange_for(symbol))
+        # Same qualify-then-fetch pattern as get_bars (see comment there).
+        try:
+            qualified = self._ib.qualifyContracts(contract)
+            if qualified and hasattr(qualified[0], "conId") and qualified[0].conId:
+                contract = qualified[0]
+        except Exception:
+            pass
+
         ticker = self._ib.reqMktData(contract, "", False, False)
         self._ib.sleep(1)  # wait for data tick
         return Snapshot(

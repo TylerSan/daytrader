@@ -68,3 +68,61 @@ def test_validator_unknown_report_type_raises():
     validator = OutputValidator()
     with pytest.raises(KeyError):
         validator.validate("any content", report_type="bogus-type")
+
+
+PREMARKET_SAMPLE_LIVE_FORMAT = """
+# 盘前每日报告 — MES
+
+## Lock-in metadata
+trades_done: 0/30
+
+## Multi-TF Analysis
+
+### W — Bar end 13:00 PT
+ohlcv data
+
+### D — Bar end 13:00 PT
+ohlcv data
+
+### 4H — bar
+ohlcv data
+
+### 1H — bar
+ohlcv data
+
+## 市场新闻 / Breaking news
+- item
+
+## C. 计划复核 / Plan Formation
+plan
+
+## B. 市场叙事 / Market Narrative
+narrative
+
+## A. 建议 / Recommendation
+
+A-3 默认: no action
+
+## 数据快照 / Data snapshot
+ok
+"""
+
+
+def test_validator_accepts_alternate_tf_labels_W_and_D():
+    """Live AI output uses '### W' / '### D' (no '1' prefix); validator must accept."""
+    validator = OutputValidator()
+    result = validator.validate(PREMARKET_SAMPLE_LIVE_FORMAT, report_type="premarket")
+    assert result.ok is True, f"unexpectedly missing: {result.missing}"
+
+
+def test_validator_reports_human_readable_label_when_alternates_all_missing():
+    """When a slot has alternates and none match, missing label shows the alternates."""
+    no_weekly = PREMARKET_SAMPLE_LIVE_FORMAT.replace("### W — Bar end 13:00 PT\nohlcv data", "")
+    # Also strip any other 'W' / 'Weekly' markers so the slot truly has no match
+    no_weekly = no_weekly.replace("Weekly", "x").replace("周线", "x").replace("1W", "x")
+    validator = OutputValidator()
+    result = validator.validate(no_weekly, report_type="premarket")
+    assert result.ok is False
+    # Missing entry should mention the alternative form
+    missing_str = " ".join(result.missing)
+    assert "W" in missing_str or "1W" in missing_str or "Weekly" in missing_str
