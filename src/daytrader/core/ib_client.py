@@ -9,8 +9,9 @@ See spec §4.1 for full design.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from ib_insync import IB
@@ -47,6 +48,24 @@ _TIMEFRAME_TO_IB_BAR_SIZE: dict[str, str] = {
     "1W": "1 week",
     "1M": "1 month",
 }
+
+_SYMBOL_TO_EXCHANGE: dict[str, str] = {
+    "MES": "CME",
+    "MNQ": "CME",
+    "ES": "CME",
+    "NQ": "CME",
+    "MGC": "COMEX",
+    "GC": "COMEX",
+}
+
+
+def _exchange_for(symbol: str) -> str:
+    """Return the canonical exchange for a futures symbol."""
+    if symbol not in _SYMBOL_TO_EXCHANGE:
+        raise ValueError(
+            f"Unknown symbol {symbol!r}; add it to _SYMBOL_TO_EXCHANGE"
+        )
+    return _SYMBOL_TO_EXCHANGE[symbol]
 
 
 def _duration_str(timeframe: str, bars: int) -> str:
@@ -139,7 +158,7 @@ class IBClient:
 
         from ib_insync import ContFuture  # local import: pure Contract, no network
 
-        contract = ContFuture(symbol, "CME")  # MES/MNQ on CME, MGC on COMEX
+        contract = ContFuture(symbol, _exchange_for(symbol))
         ib_bars = self._ib.reqHistoricalData(
             contract,
             endDateTime=end_time or "",
@@ -149,7 +168,7 @@ class IBClient:
             useRTH=False,
             formatDate=2,  # UTC seconds
         )
-        return [
+        result = [
             OHLCV(
                 timestamp=b.date,
                 open=float(b.open),
@@ -160,6 +179,13 @@ class IBClient:
             )
             for b in ib_bars
         ]
+        if len(result) < int(bars * 0.7):
+            print(
+                f"[ib_client] WARNING: requested {bars} {timeframe} bars for {symbol}, "
+                f"received {len(result)} ({len(result) / bars:.0%})",
+                file=sys.stderr,
+            )
+        return result
 
     def get_snapshot(self, symbol: str) -> Snapshot:
         """Fetch current bid/ask/last for the front-month continuous contract."""
@@ -167,11 +193,11 @@ class IBClient:
             raise RuntimeError("IBClient is not connected; call connect() first")
 
         from ib_insync import ContFuture
-        contract = ContFuture(symbol, "CME")
+        contract = ContFuture(symbol, _exchange_for(symbol))
         ticker = self._ib.reqMktData(contract, "", False, False)
         self._ib.sleep(1)  # wait for data tick
         return Snapshot(
-            timestamp=ticker.time or datetime.now(),
+            timestamp=ticker.time or datetime.now(timezone.utc),
             bid=float(ticker.bid) if ticker.bid else 0.0,
             ask=float(ticker.ask) if ticker.ask else 0.0,
             last=float(ticker.last) if ticker.last else 0.0,

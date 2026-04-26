@@ -130,3 +130,116 @@ def test_ibclient_get_snapshot_returns_current_quote(monkeypatch):
     assert snap.bid == 5246.50
     assert snap.ask == 5246.75
     assert snap.last == 5246.75
+
+
+def test_ibclient_connect_idempotent(monkeypatch):
+    """Calling connect() twice does not call ib_insync.connect() twice."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    client.connect()  # second call must early-return
+
+    # connect() called exactly once on the underlying IB
+    fake_ib.connect.assert_called_once()
+
+
+def test_ibclient_reconnect_disconnects_then_reconnects(monkeypatch):
+    """reconnect() calls disconnect() then connect()."""
+    fake_ib = MagicMock()
+    # isConnected() call sequence during reconnect():
+    #   call #1 (in disconnect()): True  → triggers ib.disconnect()
+    #   call #2 (in connect()):    False → allows ib.connect() to proceed
+    fake_ib.isConnected.side_effect = [True, False]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    client.reconnect()
+
+    # disconnect was called once, connect was called twice (initial + after reconnect)
+    fake_ib.disconnect.assert_called_once()
+    assert fake_ib.connect.call_count == 2
+
+
+def test_ibclient_get_bars_raises_when_not_connected(monkeypatch):
+    """get_bars raises RuntimeError when called after disconnect."""
+    fake_ib = MagicMock()
+    # Track connection state: True after connect, False after disconnect
+    fake_ib.isConnected.return_value = True
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    fake_ib.isConnected.return_value = False  # simulate disconnect
+    client.disconnect()
+
+    with pytest.raises(RuntimeError, match="not connected"):
+        client.get_bars(symbol="MES", timeframe="4H", bars=10)
+
+
+def test_ibclient_get_snapshot_raises_when_not_connected(monkeypatch):
+    """get_snapshot raises RuntimeError when called after disconnect."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    fake_ib.isConnected.return_value = False
+    client.disconnect()
+
+    with pytest.raises(RuntimeError, match="not connected"):
+        client.get_snapshot(symbol="MES")
+
+
+def test_ibclient_get_bars_routes_mgc_to_comex(monkeypatch):
+    """MGC must use COMEX exchange, not CME."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    fake_bar = MagicMock()
+    fake_bar.date = datetime(2026, 4, 25, 14, 0, tzinfo=timezone.utc)
+    fake_bar.open = fake_bar.high = fake_bar.low = fake_bar.close = 2340.0
+    fake_bar.volume = 50000
+    fake_ib.reqHistoricalData.return_value = [fake_bar]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    # patch ContFuture so we can capture the exchange arg
+    fake_cont_future_class = MagicMock()
+    monkeypatch.setattr(
+        "ib_insync.ContFuture",
+        fake_cont_future_class,
+    )
+
+    client = IBClient()
+    client.connect()
+    client.get_bars(symbol="MGC", timeframe="1D", bars=5)
+
+    # The ContFuture was called with ("MGC", "COMEX")
+    fake_cont_future_class.assert_called_with("MGC", "COMEX")
+
+
+def test_ibclient_unknown_symbol_raises():
+    """Unknown symbol → ValueError from _exchange_for."""
+    from daytrader.core.ib_client import _exchange_for
+
+    with pytest.raises(ValueError, match="Unknown symbol"):
+        _exchange_for("BOGUS")
