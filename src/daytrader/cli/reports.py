@@ -1,9 +1,8 @@
 """CLI command group `daytrader reports`.
 
-Phase 1 provides a dry-run subcommand that exercises the foundation:
-config load + IB connection (or skip in dry-run) + state DB init.
-
-Generation logic (Phase 2+) will plug into report-type handlers later.
+Phase 1 provided dry-run; Phase 2 added run --type premarket which
+invokes the full pipeline (IB → claude -p → Obsidian).
+Phase 5+ will add other report types via the same dispatch table.
 """
 
 from __future__ import annotations

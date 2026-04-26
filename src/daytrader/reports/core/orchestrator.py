@@ -88,86 +88,97 @@ class Orchestrator:
 
         start = time.perf_counter()
 
-        # Load context
-        loader = ContextLoader(
-            contract_path=self.contract_path,
-            journal_db_path=self.journal_db_path,
-        )
-        context = loader.load()
+        try:
+            # Load context
+            loader = ContextLoader(
+                contract_path=self.contract_path,
+                journal_db_path=self.journal_db_path,
+            )
+            context = loader.load()
 
-        # Generate
-        generator = PremarketGenerator(
-            ib_client=self.ib_client,
-            ai_analyst=self.ai_analyst,
-            symbol=self.symbol,
-        )
-        outcome = generator.generate(
-            context=context,
-            run_timestamp_pt=f"{time_pt_str} PT",
-            run_timestamp_et=f"{time_et_str} ET",
-        )
+            # Generate (includes IB fetch + AI call)
+            generator = PremarketGenerator(
+                ib_client=self.ib_client,
+                ai_analyst=self.ai_analyst,
+                symbol=self.symbol,
+            )
+            outcome = generator.generate(
+                context=context,
+                run_timestamp_pt=f"{time_pt_str} PT",
+                run_timestamp_et=f"{time_et_str} ET",
+            )
 
-        if not outcome.validation.ok:
+            if not outcome.validation.ok:
+                self.state_db.update_report_status(
+                    report_id,
+                    status="failed",
+                    failure_reason=f"validation missing: {outcome.validation.missing}",
+                    tokens_input=outcome.ai_result.input_tokens,
+                    tokens_output=outcome.ai_result.output_tokens,
+                    duration_seconds=time.perf_counter() - start,
+                )
+                return PipelineResult(
+                    success=False,
+                    report_id=report_id,
+                    report_path=None,
+                    failure_reason=(
+                        f"validation: missing sections {outcome.validation.missing}"
+                    ),
+                )
+
+            # Write to Obsidian first — the markdown file is the source of truth;
+            # the plan row is a derived index pointing back to it.
+            writer = ObsidianWriter(
+                vault_root=self.vault_root,
+                fallback_dir=self.fallback_dir,
+                daily_folder=self.daily_folder,
+            )
+            write_result = writer.write_premarket(
+                date_iso=date_et,
+                content=outcome.report_text,
+            )
+
+            # Persist plan if extractable, using the real path now that it exists
+            plan = PlanExtractor().extract(outcome.report_text)
+            if plan is not None:
+                self.state_db.save_plan(
+                    date_et=date_et,
+                    instrument=self.symbol,
+                    setup_name=plan.setup_name,
+                    direction=plan.direction,
+                    entry=plan.entry,
+                    stop=plan.stop,
+                    target=plan.target,
+                    r_unit_dollars=plan.r_unit_dollars,
+                    invalidations=plan.invalidations,
+                    raw_plan_text=plan.raw_text,
+                    source_report_path=str(write_result.path),
+                    created_at=run_at_utc,
+                )
+
+            duration = time.perf_counter() - start
+            self.state_db.update_report_status(
+                report_id,
+                status="success",
+                obsidian_path=str(write_result.path),
+                tokens_input=outcome.ai_result.input_tokens,
+                tokens_output=outcome.ai_result.output_tokens,
+                cache_hit_rate=(
+                    outcome.ai_result.cache_read_tokens
+                    / max(outcome.ai_result.input_tokens, 1)
+                ),
+                duration_seconds=duration,
+                estimated_cost_usd=self._estimate_cost(outcome.ai_result),
+            )
+
+        except Exception as exc:
             self.state_db.update_report_status(
                 report_id,
                 status="failed",
-                failure_reason=f"validation missing: {outcome.validation.missing}",
-                tokens_input=outcome.ai_result.input_tokens,
-                tokens_output=outcome.ai_result.output_tokens,
+                failure_reason=f"{type(exc).__name__}: {exc}",
                 duration_seconds=time.perf_counter() - start,
             )
-            return PipelineResult(
-                success=False,
-                report_id=report_id,
-                report_path=None,
-                failure_reason=(
-                    f"validation: missing sections {outcome.validation.missing}"
-                ),
-            )
-
-        # Persist plan if extractable
-        plan = PlanExtractor().extract(outcome.report_text)
-        if plan is not None:
-            self.state_db.save_plan(
-                date_et=date_et,
-                instrument=self.symbol,
-                setup_name=plan.setup_name,
-                direction=plan.direction,
-                entry=plan.entry,
-                stop=plan.stop,
-                target=plan.target,
-                r_unit_dollars=plan.r_unit_dollars,
-                invalidations=plan.invalidations,
-                raw_plan_text=plan.raw_text,
-                source_report_path="",  # filled below
-                created_at=run_at_utc,
-            )
-
-        # Write to Obsidian
-        writer = ObsidianWriter(
-            vault_root=self.vault_root,
-            fallback_dir=self.fallback_dir,
-            daily_folder=self.daily_folder,
-        )
-        write_result = writer.write_premarket(
-            date_iso=date_et,
-            content=outcome.report_text,
-        )
-
-        duration = time.perf_counter() - start
-        self.state_db.update_report_status(
-            report_id,
-            status="success",
-            obsidian_path=str(write_result.path),
-            tokens_input=outcome.ai_result.input_tokens,
-            tokens_output=outcome.ai_result.output_tokens,
-            cache_hit_rate=(
-                outcome.ai_result.cache_read_tokens
-                / max(outcome.ai_result.input_tokens, 1)
-            ),
-            duration_seconds=duration,
-            estimated_cost_usd=self._estimate_cost(outcome.ai_result),
-        )
+            raise
 
         return PipelineResult(
             success=True,

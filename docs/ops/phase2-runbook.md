@@ -116,6 +116,7 @@ Expected: `Report already generated today (skipped).` Exit 0. AI not called agai
 | "claude -p exit=1: not authenticated" | Claude Code CLI not signed in | Run `claude` interactively once to complete sign-in |
 | "claude -p timeout after 180s" | Slow subscription queue or hung CLI | Retry; if persistent, check `claude doctor` for issues |
 | "IBClient is not connected" | IB Gateway not running | Start IBC; verify port 4002 |
+| `ConnectionError` mid-pipeline | IB Gateway dropped during fetch | The orchestrator marks the report `failed`; manual rerun needed. Phase 2 has no auto-retry. |
 | Validation fails: missing C / B / A | Generated structure differs from template expectation | Inspect the report content; adjust `reports/templates/premarket.md` if needed |
 | Bars empty for some TF | IB Gateway not receiving market data | Check CME data subscription in IBKR account |
 | Subscription rate-limited | Hit Pro Max quota | Wait or temporarily switch to API backend (future Phase 7 work) |

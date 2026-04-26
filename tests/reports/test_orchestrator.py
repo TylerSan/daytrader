@@ -127,6 +127,47 @@ def test_orchestrator_marks_validation_failure(tmp_path):
     assert "validation" in (result.failure_reason or "").lower()
 
 
+def test_orchestrator_marks_failed_on_pipeline_exception(tmp_path):
+    """Pipeline exception → row marked 'failed' + exception re-raised."""
+    state = StateDB(str(tmp_path / "state.db"))
+    state.initialize()
+
+    fake_ib = MagicMock()
+    fake_ib.is_healthy.return_value = True
+    fake_ib.get_bars.side_effect = ConnectionError("IB dropped")
+
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result()
+
+    orchestrator = Orchestrator(
+        state_db=state,
+        ib_client=fake_ib,
+        ai_analyst=fake_ai,
+        contract_path=tmp_path / "missing.md",
+        journal_db_path=tmp_path / "missing.db",
+        vault_root=tmp_path / "vault",
+        fallback_dir=tmp_path / "fallback",
+        daily_folder="Daily",
+        symbol="MES",
+    )
+
+    with pytest.raises(ConnectionError, match="IB dropped"):
+        orchestrator.run_premarket(
+            run_at=datetime(2026, 4, 25, 13, tzinfo=timezone.utc),
+        )
+
+    # The pending row should now be marked failed
+    import sqlite3
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT * FROM reports ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row["status"] == "failed"
+    assert "ConnectionError" in row["failure_reason"]
+
+
 def test_orchestrator_idempotency_skips_repeat(tmp_path):
     state = StateDB(str(tmp_path / "state.db"))
     state.initialize()
