@@ -48,3 +48,88 @@ def dry_run(report_type: str) -> None:
     click.echo("[dry-run] AI generation: skipped (Phase 1 stub)")
     click.echo("[dry-run] delivery: skipped (Phase 1 stub)")
     click.echo("[dry-run] dry-run complete")
+
+
+@reports.command("run")
+@click.option(
+    "--type",
+    "report_type",
+    required=True,
+    type=click.Choice(VALID_TYPES, case_sensitive=False),
+    help="Report type to generate (Phase 2: only 'premarket' is implemented).",
+)
+@click.pass_context
+def run_cmd(ctx: click.Context, report_type: str) -> None:
+    """Run a real report end-to-end (touches IB Gateway and Anthropic API).
+
+    Phase 2 implements `--type premarket` only. Other types raise NotImplementedError.
+    """
+    import shutil
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from daytrader.core.config import load_config
+    from daytrader.core.ib_client import IBClient
+    from daytrader.core.state import StateDB
+    from daytrader.reports.core.ai_analyst import AIAnalyst
+    from daytrader.reports.core.orchestrator import Orchestrator
+
+    if report_type != "premarket":
+        click.echo(
+            f"Phase 2 implements premarket only. {report_type!r} is in a later phase.",
+            err=True,
+        )
+        ctx.exit(2)
+
+    if shutil.which("claude") is None:
+        click.echo(
+            "claude CLI not found on PATH. Phase 2 uses `claude -p` "
+            "(Pro Max subscription) — install Claude Code first.",
+            err=True,
+        )
+        ctx.exit(3)
+
+    project_root = Path(ctx.obj["project_root"]) if ctx.obj else Path.cwd()
+    cfg = load_config(
+        default_config=project_root / "config" / "default.yaml",
+        user_config=project_root / "config" / "user.yaml",
+    )
+
+    state = StateDB(str(project_root / cfg.reports.state_db_path))
+    state.initialize()
+
+    ib = IBClient(
+        host=cfg.reports.ib.host,
+        port=cfg.reports.ib.port,
+        client_id=cfg.reports.ib.client_id,
+    )
+    ib.connect()
+    try:
+        ai = AIAnalyst()  # claude -p backend; no API key needed
+
+        vault_root = Path(cfg.obsidian.vault_path).expanduser()
+        fallback_dir = project_root / "data" / "exports"
+
+        orchestrator = Orchestrator(
+            state_db=state,
+            ib_client=ib,
+            ai_analyst=ai,
+            contract_path=project_root / cfg.journal.contract_path,
+            journal_db_path=project_root / cfg.journal.db_path,
+            vault_root=vault_root,
+            fallback_dir=fallback_dir,
+            daily_folder=cfg.obsidian.daily_folder,
+            symbol="MES",
+        )
+        result = orchestrator.run_premarket(run_at=datetime.now(timezone.utc))
+
+        if result.skipped_idempotent:
+            click.echo("Report already generated today (skipped).")
+            return
+        if result.success:
+            click.echo(f"Report generated: {result.report_path}")
+        else:
+            click.echo(f"Report FAILED: {result.failure_reason}", err=True)
+            ctx.exit(1)
+    finally:
+        ib.disconnect()

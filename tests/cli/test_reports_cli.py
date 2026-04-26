@@ -47,3 +47,30 @@ def test_reports_dry_run_all_types_succeed():
         result = runner.invoke(cli, ["reports", "dry-run", "--type", t])
         assert result.exit_code == 0, f"failed for type={t}: {result.output}"
         assert "dry-run complete" in result.output.lower()
+
+
+def test_reports_run_command_registered():
+    """`daytrader reports run --help` lists --type."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reports", "run", "--help"])
+    assert result.exit_code == 0
+    assert "--type" in result.output
+
+
+def test_reports_run_unknown_type_fails():
+    """Unknown --type → non-zero exit."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reports", "run", "--type", "bogus"])
+    assert result.exit_code != 0
+
+
+def test_reports_run_premarket_no_claude_cli_clearly_errors(monkeypatch, tmp_path):
+    """Without claude CLI on PATH, run --type premarket exits non-zero with a clear message."""
+    runner = CliRunner()
+    # Strip PATH so `claude` cannot be found
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli, ["reports", "run", "--type", "premarket"])
+    assert result.exit_code != 0
+    combined = (result.output or "").lower()
+    assert "claude" in combined or "not found" in combined or "path" in combined
