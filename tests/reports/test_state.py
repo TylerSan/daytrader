@@ -252,3 +252,36 @@ def test_statedb_save_lock_in_snapshot_and_latest(tmp_state_db):
     assert latest["breakdown_mes"] == 4
     assert latest["breakdown_mnq"] == 2
     assert latest["breakdown_mgc"] == 1
+
+
+def test_statedb_cache_and_load_bars(tmp_state_db):
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    bars_in = [
+        ("MES", "1D", "2026-04-23T22:00:00+00:00", 5240.0, 5252.0, 5238.0, 5246.0, 142000.0),
+        ("MES", "1D", "2026-04-24T22:00:00+00:00", 5246.0, 5260.0, 5244.0, 5258.0, 138000.0),
+    ]
+    db.cache_bars(bars_in)
+
+    out = db.load_cached_bars("MES", "1D")
+    assert len(out) == 2
+    assert out[0]["close"] == pytest.approx(5246.0)
+    assert out[1]["close"] == pytest.approx(5258.0)
+
+
+def test_statedb_cache_replaces_on_same_key(tmp_state_db):
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    db.cache_bars([
+        ("MES", "1D", "2026-04-23T22:00:00+00:00", 5240.0, 5252.0, 5238.0, 5246.0, 142000.0),
+    ])
+    # Replace with corrected close
+    db.cache_bars([
+        ("MES", "1D", "2026-04-23T22:00:00+00:00", 5240.0, 5252.0, 5238.0, 5247.0, 145000.0),
+    ])
+
+    out = db.load_cached_bars("MES", "1D")
+    assert len(out) == 1
+    assert out[0]["close"] == pytest.approx(5247.0)

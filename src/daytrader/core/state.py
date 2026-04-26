@@ -341,6 +341,35 @@ class StateDB:
             "SELECT * FROM lock_in_status ORDER BY snapshot_at DESC LIMIT 1"
         ).fetchone()
 
+    # --- bar_cache table ---
+
+    def cache_bars(
+        self,
+        bars: list[tuple[str, str, str, float, float, float, float, float]],
+    ) -> None:
+        """Insert/replace cached bars. Each tuple:
+        (instrument, timeframe, bar_time_iso, open, high, low, close, volume)
+        """
+        conn = self._get_conn()
+        conn.executemany(
+            """INSERT OR REPLACE INTO bar_cache
+               (instrument, timeframe, bar_time, open, high, low, close, volume)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            bars,
+        )
+        conn.commit()
+
+    def load_cached_bars(
+        self, instrument: str, timeframe: str
+    ) -> list[sqlite3.Row]:
+        conn = self._get_conn()
+        return list(conn.execute(
+            """SELECT * FROM bar_cache
+               WHERE instrument = ? AND timeframe = ?
+               ORDER BY bar_time ASC""",
+            (instrument, timeframe),
+        ).fetchall())
+
     def already_generated_today(self, report_type: str, date_et: str) -> bool:
         """Idempotency check: did a successful report of this type run today?"""
         conn = self._get_conn()
