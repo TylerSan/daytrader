@@ -6,7 +6,21 @@
 
 **Architecture:** Build the orchestration spine in `src/daytrader/reports/core/` (context_loader, prompt_builder, ai_analyst, output_validator, orchestrator) and the type-specific layer in `src/daytrader/reports/types/premarket.py`. Use `core/ib_client.py` for bars (Phase 1) and `core/state.py` for plan/report persistence (Phase 1). Read-only integration with `journal/contract.py` and `journal/repository.py`. Output via `reports/delivery/obsidian_writer.py`. Out of scope: multi-instrument, F. futures structure, other report types, Telegram/PDF/charts, launchd.
 
-**Tech Stack:** Python 3.12+, anthropic SDK (with prompt caching), ib_insync (Phase 1), pytest, click. **Real services touched at Phase 2 acceptance**: IB Gateway (local) + Anthropic API.
+**Tech Stack:** Python 3.12+, **`claude -p` CLI subprocess** (uses user's Claude Pro Max subscription, no separate API key needed for Phase 2), ib_insync (Phase 1), pytest, click. **Real services touched at Phase 2 acceptance**: IB Gateway (local) + Claude Code CLI (`claude` command must be on PATH and authenticated).
+
+## Backend Choice — Phase 2 uses `claude -p`, NOT Anthropic API
+
+User has Claude Pro Max subscription (decided 2026-04-25 with full awareness of trade-offs). Phase 2 invokes Claude via `claude -p` subprocess to leverage that subscription instead of consuming separate API budget.
+
+| Trade-off | Phase 2 implication |
+|---|---|
+| ✅ Zero per-run cost (covered by subscription) | Phase 2 dev iteration is free |
+| ❌ No explicit prompt-caching markers | CLI handles caching opaquely; spec §4.3.4 cost estimates moot |
+| ❌ No token counts in response | `tokens_input`/`tokens_output` recorded as 0 in `reports` table |
+| ❌ Subscription rate limits | Phase 2 PoC fine (1 run/day); Phase 7 production may need API switch |
+| ⚠️ Phase 7 reconsideration | If 6×day × 3 instruments hits rate limits, swap `AIAnalyst` to an API backend |
+
+The `AIAnalyst` interface stays the same so a future API backend can drop in without touching `Orchestrator` or `PremarketGenerator`.
 
 **Spec reference:** `docs/superpowers/specs/2026-04-25-reports-system-design.md` §3.2-3.7 (templates), §4.3 (AI layer), §4.5 (Contract.md state machine), §5.2 (Obsidian writer).
 
@@ -54,63 +68,70 @@
 
 ---
 
-## Task 1: Add anthropic prompt-caching sanity check
+## Task 1: Verify `claude` CLI is available
 
-The Phase 1 deps already include `anthropic>=0.40`. We need to verify prompt caching works with the installed version before building on it.
+Phase 2 invokes Claude via `claude -p` subprocess. Verify the command exists on PATH and is authenticated before building on it.
 
 **Files:**
-- Create: `tests/reports/test_anthropic_caching_smoke.py`
+- Create: `tests/reports/test_claude_cli_smoke.py`
 
-- [ ] **Step 1: Write the smoke test (skipped without API key)**
+- [ ] **Step 1: Write the smoke test (skipped if CLI absent)**
 
-Create `tests/reports/test_anthropic_caching_smoke.py`:
+Create `tests/reports/test_claude_cli_smoke.py`:
 
 ```python
-"""Smoke test: verify the installed anthropic SDK supports prompt caching API.
+"""Smoke test: verify the `claude` CLI is available on PATH.
 
-This test does NOT call the API. It only verifies that the request shape we
-plan to use (cache_control on system blocks) is accepted by the SDK's type system.
+Phase 2 invokes Claude via `claude -p` subprocess (using the user's
+Pro Max subscription) rather than the Anthropic API. We verify the
+binary is reachable without making a real call.
 """
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+
 import pytest
 
 
-def test_anthropic_sdk_imports():
-    """anthropic package is importable and version is recent enough."""
-    import anthropic
-    # 0.40+ supports prompt caching
-    parts = anthropic.__version__.split(".")
-    assert int(parts[0]) >= 0
-    if int(parts[0]) == 0:
-        assert int(parts[1]) >= 40, (
-            f"anthropic SDK {anthropic.__version__} too old for prompt caching"
+def test_claude_cli_on_path():
+    """`claude` is resolvable via shutil.which."""
+    path = shutil.which("claude")
+    if path is None:
+        pytest.skip(
+            "claude CLI not on PATH — install Claude Code to run Phase 2 acceptance"
         )
+    assert path  # truthy; e.g. /usr/local/bin/claude
 
 
-def test_anthropic_message_block_supports_cache_control():
-    """The message block schema accepts cache_control."""
-    # We construct the dict shape we'll use; if the SDK ever rejects it on
-    # a forward version we'll catch that here before AI tasks are wired up.
-    block = {
-        "type": "text",
-        "text": "test content",
-        "cache_control": {"type": "ephemeral"},
-    }
-    assert block["cache_control"]["type"] == "ephemeral"
+def test_claude_cli_help_succeeds():
+    """`claude --help` exits 0 and prints usage."""
+    if shutil.which("claude") is None:
+        pytest.skip("claude CLI not on PATH")
+    result = subprocess.run(
+        ["claude", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0
+    # Usage banner should mention --print or -p
+    combined = (result.stdout + result.stderr).lower()
+    assert "print" in combined or "-p" in combined
 ```
 
 - [ ] **Step 2: Run**
 
-Run: `uv run pytest tests/reports/test_anthropic_caching_smoke.py -v`
-Expected: 2 tests PASS.
+Run: `uv run pytest tests/reports/test_claude_cli_smoke.py -v`
+Expected: 2 tests PASS (or both SKIPPED if `claude` is not on PATH; that's
+acceptable — Phase 2 acceptance Task 14 will guide installation).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/reports/test_anthropic_caching_smoke.py
-git commit -m "test(reports): smoke-check anthropic SDK supports prompt caching"
+git add tests/reports/test_claude_cli_smoke.py
+git commit -m "test(reports): smoke-check claude CLI is reachable on PATH"
 ```
 
 ---
@@ -803,7 +824,7 @@ git commit -m "feat(reports): PromptBuilder.build_premarket with cache markers"
 
 ---
 
-## Task 6: AIAnalyst — Anthropic SDK wrapper with retry
+## Task 6: AIAnalyst — `claude -p` subprocess wrapper with retry
 
 **Files:**
 - Create: `src/daytrader/reports/core/ai_analyst.py`
@@ -814,101 +835,125 @@ git commit -m "feat(reports): PromptBuilder.build_premarket with cache markers"
 Create `tests/reports/test_ai_analyst.py`:
 
 ```python
-"""Tests for AIAnalyst."""
+"""Tests for AIAnalyst (claude -p backend)."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import subprocess
+from unittest.mock import MagicMock
 
 import pytest
 
 from daytrader.reports.core.ai_analyst import AIAnalyst, AIResult
 
 
-def _fake_anthropic_response(text: str, in_tokens: int = 1000, out_tokens: int = 500):
-    response = MagicMock()
-    response.content = [MagicMock(type="text", text=text)]
-    response.usage = MagicMock(
-        input_tokens=in_tokens,
-        output_tokens=out_tokens,
-        cache_creation_input_tokens=0,
-        cache_read_input_tokens=0,
-    )
-    response.stop_reason = "end_turn"
-    response.model = "claude-opus-4-7"
-    return response
+def _completed_process(stdout: str, returncode: int = 0, stderr: str = ""):
+    cp = MagicMock()
+    cp.stdout = stdout
+    cp.stderr = stderr
+    cp.returncode = returncode
+    return cp
 
 
-def test_ai_analyst_returns_text_and_usage(monkeypatch):
-    """Successful call returns text plus token counts."""
-    fake_client = MagicMock()
-    fake_client.messages.create.return_value = _fake_anthropic_response("# Report")
+def test_ai_analyst_returns_text_from_claude_cli(monkeypatch):
+    """call() invokes `claude -p` and returns the stdout in AIResult.text."""
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["input"] = kwargs.get("input")
+        return _completed_process("# Report\n\nbody")
 
     monkeypatch.setattr(
-        "daytrader.reports.core.ai_analyst.Anthropic",
-        MagicMock(return_value=fake_client),
+        "daytrader.reports.core.ai_analyst.subprocess.run", fake_run
     )
 
-    analyst = AIAnalyst(api_key="sk-test", model="claude-opus-4-7")
+    analyst = AIAnalyst()
     result = analyst.call(
         messages=[
-            {"role": "system", "content": [{"type": "text", "text": "sys"}]},
-            {"role": "user", "content": "go"},
+            {"role": "system", "content": [{"type": "text", "text": "system instructions"}]},
+            {"role": "user", "content": "user message"},
         ],
         max_tokens=4096,
     )
 
     assert isinstance(result, AIResult)
-    assert result.text == "# Report"
-    assert result.input_tokens == 1000
-    assert result.output_tokens == 500
+    assert result.text == "# Report\n\nbody"
+    # tokens unavailable in CLI mode → 0
+    assert result.input_tokens == 0
+    assert result.output_tokens == 0
+    # cmd starts with "claude" and contains "-p"
+    assert captured["cmd"][0] == "claude"
+    assert "-p" in captured["cmd"]
+    # Combined system + user content was passed via stdin
+    assert "system instructions" in captured["input"]
+    assert "user message" in captured["input"]
 
 
-def test_ai_analyst_retries_on_transient_error(monkeypatch):
-    """Two failures then success → retried."""
-    fake_client = MagicMock()
-    fake_client.messages.create.side_effect = [
-        Exception("transient 1"),
-        Exception("transient 2"),
-        _fake_anthropic_response("ok"),
-    ]
+def test_ai_analyst_retries_on_nonzero_exit(monkeypatch):
+    """Two non-zero exits then success → retried 3 times total."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if len(calls) < 3:
+            return _completed_process("", returncode=1, stderr="transient error")
+        return _completed_process("ok")
+
     monkeypatch.setattr(
-        "daytrader.reports.core.ai_analyst.Anthropic",
-        MagicMock(return_value=fake_client),
+        "daytrader.reports.core.ai_analyst.subprocess.run", fake_run
+    )
+    monkeypatch.setattr(
+        "daytrader.reports.core.ai_analyst.time.sleep", lambda _: None
     )
 
-    # Replace sleep so the test is fast
-    monkeypatch.setattr("daytrader.reports.core.ai_analyst.time.sleep", lambda _: None)
-
-    analyst = AIAnalyst(api_key="sk-test", model="claude-opus-4-7")
+    analyst = AIAnalyst()
     result = analyst.call(
         messages=[{"role": "user", "content": "x"}],
         max_tokens=128,
     )
 
     assert result.text == "ok"
-    assert fake_client.messages.create.call_count == 3
+    assert len(calls) == 3
 
 
 def test_ai_analyst_raises_after_max_retries(monkeypatch):
-    """4th failure surfaces the exception (max_retries = 3)."""
-    fake_client = MagicMock()
-    fake_client.messages.create.side_effect = Exception("persistent")
-    monkeypatch.setattr(
-        "daytrader.reports.core.ai_analyst.Anthropic",
-        MagicMock(return_value=fake_client),
-    )
-    monkeypatch.setattr("daytrader.reports.core.ai_analyst.time.sleep", lambda _: None)
+    """4 non-zero exits surface as RuntimeError (max_retries=3 means 1 initial + 3 retries)."""
 
-    analyst = AIAnalyst(api_key="sk-test", model="claude-opus-4-7")
-    with pytest.raises(Exception, match="persistent"):
+    def fake_run(cmd, **kwargs):
+        return _completed_process("", returncode=2, stderr="persistent")
+
+    monkeypatch.setattr(
+        "daytrader.reports.core.ai_analyst.subprocess.run", fake_run
+    )
+    monkeypatch.setattr(
+        "daytrader.reports.core.ai_analyst.time.sleep", lambda _: None
+    )
+
+    analyst = AIAnalyst()
+    with pytest.raises(RuntimeError, match="persistent"):
         analyst.call(
             messages=[{"role": "user", "content": "x"}],
             max_tokens=128,
         )
 
-    # 1 initial + 3 retries = 4 calls
-    assert fake_client.messages.create.call_count == 4
+
+def test_ai_analyst_handles_subprocess_timeout(monkeypatch):
+    """A subprocess.TimeoutExpired surfaces as a retry trigger, then RuntimeError."""
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=180)
+
+    monkeypatch.setattr(
+        "daytrader.reports.core.ai_analyst.subprocess.run", fake_run
+    )
+    monkeypatch.setattr(
+        "daytrader.reports.core.ai_analyst.time.sleep", lambda _: None
+    )
+
+    analyst = AIAnalyst(max_retries=1)
+    with pytest.raises(RuntimeError, match="timeout"):
+        analyst.call(messages=[{"role": "user", "content": "x"}], max_tokens=128)
 ```
 
 - [ ] **Step 2: Run tests**
@@ -916,122 +961,136 @@ def test_ai_analyst_raises_after_max_retries(monkeypatch):
 Run: `uv run pytest tests/reports/test_ai_analyst.py -v`
 Expected: FAIL — module not implemented.
 
-- [ ] **Step 3: Implement AIAnalyst**
+- [ ] **Step 3: Implement AIAnalyst (claude -p backend)**
 
 Create `src/daytrader/reports/core/ai_analyst.py`:
 
 ```python
-"""AIAnalyst: Anthropic SDK wrapper with prompt caching + retry.
+"""AIAnalyst: claude CLI subprocess wrapper.
 
-Phase 2 wires Opus 4.7 with prompt caching enabled. Caching is opt-in per
-message block via cache_control field; PromptBuilder marks the stable parts.
+Phase 2 invokes Claude via `claude -p` (the Claude Code CLI's print mode),
+using the user's Claude Pro Max subscription rather than the Anthropic API.
+This eliminates per-run cost during PoC and dev iteration.
+
+Trade-offs vs Anthropic SDK (see plan preamble):
+- No explicit prompt-caching markers (CLI may cache internally)
+- No token counts in the response → AIResult.input_tokens / output_tokens = 0
+- Phase 7 production may need to swap in an API backend if Pro Max rate limits
+  prove insufficient for 6×day × multi-instrument cadence
+
+The interface (AIResult shape, .call() signature) is stable so a future API
+backend can be added without touching Orchestrator or PremarketGenerator.
 """
 
 from __future__ import annotations
 
+import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any
 
-from anthropic import Anthropic
-
 
 @dataclass(frozen=True)
 class AIResult:
-    """Anthropic call outcome."""
+    """One Claude call outcome."""
     text: str
-    input_tokens: int
-    output_tokens: int
-    cache_creation_tokens: int
-    cache_read_tokens: int
+    input_tokens: int          # 0 in CLI mode
+    output_tokens: int         # 0 in CLI mode
+    cache_creation_tokens: int  # 0 in CLI mode
+    cache_read_tokens: int      # 0 in CLI mode
     model: str
     stop_reason: str
 
 
 class AIAnalyst:
-    """Thin wrapper around anthropic.Anthropic with retry + cost tracking."""
+    """`claude -p` subprocess wrapper with exponential-backoff retry."""
 
     def __init__(
         self,
-        api_key: str,
         model: str = "claude-opus-4-7",
         max_retries: int = 3,
+        timeout_seconds: int = 180,
     ) -> None:
-        self.api_key = api_key
         self.model = model
         self.max_retries = max_retries
-        self._client = Anthropic(api_key=api_key)
+        self.timeout_seconds = timeout_seconds
 
     def call(
         self,
         messages: list[dict[str, Any]],
         max_tokens: int = 8192,
     ) -> AIResult:
-        """Call Claude with exponential-backoff retry."""
-        # Separate system + user messages per Anthropic API shape:
-        # system = list of content blocks; messages = role=user/assistant only.
-        system_blocks: list[dict[str, Any]] = []
-        non_system_messages: list[dict[str, Any]] = []
-        for m in messages:
-            if m["role"] == "system":
-                content = m["content"]
-                if isinstance(content, list):
-                    system_blocks.extend(content)
-                else:
-                    system_blocks.append({"type": "text", "text": content})
-            else:
-                non_system_messages.append(m)
+        """Invoke `claude -p`, return AIResult.
 
-        last_exc: Exception | None = None
+        Messages are flattened into a single prompt string passed via stdin.
+        System content is prefixed with "[SYSTEM]" markers; user content with
+        "[USER]" markers. claude -p returns plain text on stdout.
+        """
+        prompt = self._flatten_messages(messages)
+        cmd = ["claude", "-p"]
+
+        last_error: str | None = None
         for attempt in range(self.max_retries + 1):
             try:
-                response = self._client.messages.create(
-                    model=self.model,
-                    max_tokens=max_tokens,
-                    system=system_blocks if system_blocks else None,
-                    messages=non_system_messages,
+                result = subprocess.run(
+                    cmd,
+                    input=prompt,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout_seconds,
                 )
-                text = "".join(
-                    block.text for block in response.content
-                    if getattr(block, "type", None) == "text"
+                if result.returncode == 0:
+                    return AIResult(
+                        text=result.stdout,
+                        input_tokens=0,
+                        output_tokens=0,
+                        cache_creation_tokens=0,
+                        cache_read_tokens=0,
+                        model=self.model,
+                        stop_reason="end_turn",
+                    )
+                last_error = (
+                    f"claude -p exit={result.returncode}: "
+                    f"{result.stderr.strip() or 'no stderr'}"
                 )
-                return AIResult(
-                    text=text,
-                    input_tokens=response.usage.input_tokens,
-                    output_tokens=response.usage.output_tokens,
-                    cache_creation_tokens=getattr(
-                        response.usage, "cache_creation_input_tokens", 0
-                    ),
-                    cache_read_tokens=getattr(
-                        response.usage, "cache_read_input_tokens", 0
-                    ),
-                    model=response.model,
-                    stop_reason=response.stop_reason,
-                )
-            except Exception as e:
-                last_exc = e
-                if attempt < self.max_retries:
-                    backoff = 2 ** attempt
-                    time.sleep(backoff)
-                    continue
-                raise
+            except subprocess.TimeoutExpired:
+                last_error = f"claude -p timeout after {self.timeout_seconds}s"
 
-        # Defensive — shouldn't reach here
-        if last_exc is not None:
-            raise last_exc
-        raise RuntimeError("AI call failed without exception")
+            if attempt < self.max_retries:
+                time.sleep(2 ** attempt)
+                continue
+            raise RuntimeError(f"AI call failed: {last_error}")
+
+        # Defensive — should be unreachable
+        raise RuntimeError(f"AI call failed: {last_error}")
+
+    @staticmethod
+    def _flatten_messages(messages: list[dict[str, Any]]) -> str:
+        """Concatenate role-tagged blocks into a single prompt for claude -p."""
+        parts: list[str] = []
+        for msg in messages:
+            role = msg["role"].upper()
+            content = msg["content"]
+            if isinstance(content, list):
+                # API-shape: list of {type, text, ...} blocks
+                for block in content:
+                    if block.get("type") == "text":
+                        parts.append(f"[{role}]\n{block['text']}")
+            else:
+                parts.append(f"[{role}]\n{content}")
+        return "\n\n".join(parts)
 ```
 
 - [ ] **Step 4: Run tests**
 
 Run: `uv run pytest tests/reports/test_ai_analyst.py -v`
-Expected: 3 tests PASS.
+Expected: 4 tests PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/daytrader/reports/core/ai_analyst.py tests/reports/test_ai_analyst.py
-git commit -m "feat(reports): AIAnalyst with prompt caching + exponential retry"
+git commit -m "feat(reports): AIAnalyst via claude -p subprocess (Pro Max subscription path)"
 ```
 
 ---
@@ -2169,14 +2228,16 @@ def test_reports_run_unknown_type_fails():
     assert result.exit_code != 0
 
 
-def test_reports_run_premarket_no_secrets_clearly_errors(monkeypatch, tmp_path):
-    """Without secrets.yaml, run --type premarket exits non-zero with a clear message."""
+def test_reports_run_premarket_no_claude_cli_clearly_errors(monkeypatch, tmp_path):
+    """Without claude CLI on PATH, run --type premarket exits non-zero with a clear message."""
     runner = CliRunner()
-    # Force a path with no secrets.yaml present
+    # Strip PATH so `claude` cannot be found
+    monkeypatch.setenv("PATH", "")
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(cli, ["reports", "run", "--type", "premarket"])
     assert result.exit_code != 0
-    assert "secrets" in result.output.lower() or "not found" in result.output.lower()
+    combined = (result.output or "").lower()
+    assert "claude" in combined or "not found" in combined or "path" in combined
 ```
 
 - [ ] **Step 2: Run tests**
@@ -2205,6 +2266,7 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
 
     Phase 2 implements `--type premarket` only. Other types raise NotImplementedError.
     """
+    import shutil
     from datetime import datetime, timezone
     from pathlib import Path
 
@@ -2213,7 +2275,6 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
     from daytrader.core.state import StateDB
     from daytrader.reports.core.ai_analyst import AIAnalyst
     from daytrader.reports.core.orchestrator import Orchestrator
-    from daytrader.reports.core.secrets import load_secrets, SecretsError
 
     if report_type != "premarket":
         click.echo(
@@ -2222,19 +2283,19 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
         )
         ctx.exit(2)
 
+    if shutil.which("claude") is None:
+        click.echo(
+            "claude CLI not found on PATH. Phase 2 uses `claude -p` "
+            "(Pro Max subscription) — install Claude Code first.",
+            err=True,
+        )
+        ctx.exit(3)
+
     project_root = Path(ctx.obj["project_root"]) if ctx.obj else Path.cwd()
     cfg = load_config(
         default_config=project_root / "config" / "default.yaml",
         user_config=project_root / "config" / "user.yaml",
     )
-
-    secrets_path = project_root / "config" / "secrets.yaml"
-    try:
-        secrets = load_secrets(str(secrets_path))
-    except SecretsError as e:
-        click.echo(f"Secrets error: {e}", err=True)
-        ctx.exit(3)
-        return  # for type checkers
 
     state = StateDB(str(project_root / cfg.reports.state_db_path))
     state.initialize()
@@ -2246,7 +2307,7 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
     )
     ib.connect()
     try:
-        ai = AIAnalyst(api_key=secrets.anthropic_api_key)
+        ai = AIAnalyst()  # claude -p backend; no API key needed
 
         vault_root = Path(cfg.obsidian.vault_path).expanduser()
         fallback_dir = project_root / "data" / "exports"
@@ -2418,14 +2479,17 @@ that proves the foundation works against real IB Gateway and real Anthropic API.
 ## Prerequisites
 
 1. **IB Gateway running locally** — see `docs/ops/ib-gateway-setup.md` (Phase 1).
-2. **Anthropic API key** — sign in at <https://console.anthropic.com>, create a key,
-   then create `config/secrets.yaml` from the example template:
+2. **Claude Code CLI installed and authenticated** — Phase 2 invokes Claude via
+   `claude -p` (Pro Max subscription path), NOT the Anthropic API. Verify:
 
    ```bash
-   cp config/secrets.yaml.example config/secrets.yaml
-   # edit config/secrets.yaml — fill anthropic.api_key
-   # telegram fields can stay placeholder for Phase 2 (not used yet)
+   which claude        # should print a path
+   claude --help       # should show usage
+   echo "say hi" | claude -p   # quick auth check; should print a response
    ```
+
+   If `claude` is not on PATH, install Claude Code from <https://claude.com/claude-code>
+   and sign in with your Pro/Max account before continuing.
 
 3. **Obsidian vault path** — set in `config/user.yaml`:
 
@@ -2455,21 +2519,24 @@ uv run daytrader reports run --type premarket
 ```
 
 What it does:
-1. Loads config + `config/secrets.yaml` (fails fast if missing fields)
-2. Connects to IB Gateway on `127.0.0.1:4002`
-3. Fetches MES bars: 52 weekly + 200 daily + 50 4H + 24 1H
-4. Loads Contract.md (degrades gracefully if missing)
-5. Builds prompt with Anthropic prompt-caching markers
-6. Calls Claude Opus 4.7 (~3-15 seconds)
-7. Validates required sections
-8. Extracts today's plan, saves to SQLite `plans` table
-9. Writes markdown to `<vault>/Daily/2026-MM-DD-premarket.md`
-10. Records report metadata + cost in SQLite `reports` table
-11. Disconnects from IB Gateway
+1. Verifies `claude` CLI is on PATH (fails fast if missing)
+2. Loads config (no API key needed in Phase 2)
+3. Connects to IB Gateway on `127.0.0.1:4002`
+4. Fetches MES bars: 52 weekly + 200 daily + 50 4H + 24 1H
+5. Loads Contract.md (degrades gracefully if missing)
+6. Builds prompt as a flattened `[SYSTEM] / [USER]` text block
+7. Invokes `claude -p` subprocess (~5-30 seconds, depends on subscription queue)
+8. Validates required sections in the returned markdown
+9. Extracts today's plan, saves to SQLite `plans` table
+10. Writes markdown to `<vault>/Daily/2026-MM-DD-premarket.md`
+11. Records report metadata in SQLite `reports` table (token counts will be 0)
+12. Disconnects from IB Gateway
 
 Expected stdout: `Report generated: /path/to/2026-MM-DD-premarket.md`
 
-Expected cost (approximate, 1 run): $0.20 - $0.60 USD.
+Expected cost (per run): **$0** — covered by your Claude Pro Max subscription. Subscription
+usage counts toward your monthly quota; for Phase 2 dev/testing this is not a concern,
+but Phase 7 production cadence (~6 runs/day × 3 instruments) may need re-evaluation.
 
 ## Step 3: Inspect the output
 
@@ -2518,11 +2585,13 @@ Expected: `Report already generated today (skipped).` Exit 0. AI not called agai
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| "Secrets file not found" | `config/secrets.yaml` missing | Copy from example, fill api key |
+| "claude CLI not found on PATH" | Claude Code not installed or not in shell PATH | Install Claude Code; ensure shell rc sources its bin path |
+| "claude -p exit=1: not authenticated" | Claude Code CLI not signed in | Run `claude` interactively once to complete sign-in |
+| "claude -p timeout after 180s" | Slow subscription queue or hung CLI | Retry; if persistent, check `claude doctor` for issues |
 | "IBClient is not connected" | IB Gateway not running | Start IBC; verify port 4002 |
-| Validation fails: missing C / B / A | Anthropic generated different structure than template expects | Inspect the report content, adjust template `templates/premarket.md` if needed |
-| AI call times out | Slow connection or rate limit | Retry; check `cumulative_r` in `reports` table |
-| Bars empty for some TF | IB Gateway not receiving market data subscription | Check CME data subscription in IBKR account |
+| Validation fails: missing C / B / A | Generated structure differs from template expectation | Inspect the report content; adjust `reports/templates/premarket.md` if needed |
+| Bars empty for some TF | IB Gateway not receiving market data | Check CME data subscription in IBKR account |
+| Subscription rate-limited | Hit Pro Max quota | Wait or temporarily switch to API backend (future Phase 7 work) |
 
 ## What this run does NOT yet do (Phase 3+)
 
