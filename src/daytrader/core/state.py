@@ -264,6 +264,42 @@ class StateDB:
         conn.commit()
         return True
 
+    # --- failures table ---
+
+    def log_failure(
+        self,
+        report_type: str,
+        scheduled_at: datetime,
+        failure_stage: str,
+        failure_reason: str,
+        retry_count: int,
+    ) -> int:
+        conn = self._get_conn()
+        cur = conn.execute(
+            """INSERT INTO failures
+               (report_type, scheduled_at, failure_stage,
+                failure_reason, retry_count)
+               VALUES (?, ?, ?, ?, ?)""",
+            (report_type, scheduled_at.isoformat(),
+             failure_stage, failure_reason, retry_count),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+    def list_unresolved_failures(self) -> list[sqlite3.Row]:
+        conn = self._get_conn()
+        return list(conn.execute(
+            "SELECT * FROM failures WHERE resolved_at IS NULL ORDER BY id"
+        ).fetchall())
+
+    def resolve_failure(self, failure_id: int, resolved_at: datetime) -> None:
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE failures SET resolved_at = ? WHERE id = ?",
+            (resolved_at.isoformat(), failure_id),
+        )
+        conn.commit()
+
     def already_generated_today(self, report_type: str, date_et: str) -> bool:
         """Idempotency check: did a successful report of this type run today?"""
         conn = self._get_conn()

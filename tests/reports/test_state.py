@@ -207,3 +207,25 @@ def test_statedb_news_seen_dedup(tmp_state_db):
         impact_tag="material",
         first_seen_at=datetime(2026, 4, 25, 20, 0, tzinfo=timezone.utc),
     ) is False
+
+
+def test_statedb_log_failure_and_resolve(tmp_state_db):
+    """log_failure stores; resolve_failure marks resolved_at."""
+    db = StateDB(str(tmp_state_db))
+    db.initialize()
+
+    fid = db.log_failure(
+        report_type="premarket",
+        scheduled_at=datetime(2026, 4, 25, 13, 0, tzinfo=timezone.utc),
+        failure_stage="ai",
+        failure_reason="anthropic timeout after 3 retries",
+        retry_count=3,
+    )
+    assert fid > 0
+
+    unresolved = db.list_unresolved_failures()
+    assert len(unresolved) == 1
+    assert unresolved[0]["failure_stage"] == "ai"
+
+    db.resolve_failure(fid, resolved_at=datetime(2026, 4, 25, 13, 30, tzinfo=timezone.utc))
+    assert db.list_unresolved_failures() == []
