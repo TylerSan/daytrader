@@ -29,3 +29,21 @@ def test_reports_dry_run_unknown_type_fails():
     runner = CliRunner()
     result = runner.invoke(cli, ["reports", "dry-run", "--type", "bogus"])
     assert result.exit_code != 0
+
+
+def test_reports_dry_run_all_types_succeed():
+    """Each valid --type runs dry-run successfully."""
+    runner = CliRunner()
+    valid_types = [
+        "premarket",
+        "intraday-4h-1",
+        "intraday-4h-2",
+        "eod",
+        "night",
+        "asia",
+        "weekly",
+    ]
+    for t in valid_types:
+        result = runner.invoke(cli, ["reports", "dry-run", "--type", t])
+        assert result.exit_code == 0, f"failed for type={t}: {result.output}"
+        assert "dry-run complete" in result.output.lower()
