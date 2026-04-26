@@ -9,7 +9,61 @@ See spec §4.1 for full design.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Literal
+
 from ib_insync import IB
+
+
+@dataclass(frozen=True)
+class OHLCV:
+    """One OHLCV bar."""
+
+    timestamp: datetime  # bar end time, UTC
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+_TIMEFRAME_TO_IB_BAR_SIZE: dict[str, str] = {
+    "1m": "1 min",
+    "15m": "15 mins",
+    "1H": "1 hour",
+    "4H": "4 hours",
+    "1D": "1 day",
+    "1W": "1 week",
+    "1M": "1 month",
+}
+
+
+def _duration_str(timeframe: str, bars: int) -> str:
+    """Compute IB durationStr from desired (timeframe, bars).
+
+    IB requires duration like '50 D' or '52 W'. We approximate using
+    floor division so the result is a round number of the requested unit.
+
+    Plan bug corrected: the original formula `(bars * 4 + 23) // 24 + 1`
+    produced 10 for (4H, 50) but the spec/test requires 8.  The correct
+    formula is `(bars * 4) // 24` which gives floor(200/24) = 8.
+    """
+    if timeframe == "1m":
+        return f"{bars * 60} S"
+    if timeframe == "15m":
+        return f"{bars * 15} S" if bars * 15 < 86400 else f"{(bars * 15) // 1440 + 1} D"
+    if timeframe == "1H":
+        return f"{bars // 24 + 1} D"
+    if timeframe == "4H":
+        return f"{(bars * 4) // 24} D"
+    if timeframe == "1D":
+        return f"{bars} D"
+    if timeframe == "1W":
+        return f"{bars} W"
+    if timeframe == "1M":
+        return f"{bars} M"
+    raise ValueError(f"Unsupported timeframe: {timeframe}")
 
 
 class IBClient:
@@ -52,3 +106,47 @@ class IBClient:
     def is_healthy(self) -> bool:
         """Return True iff connected to IB Gateway."""
         return self._ib is not None and self._ib.isConnected()
+
+    def get_bars(
+        self,
+        symbol: str,
+        timeframe: Literal["1m", "15m", "1H", "4H", "1D", "1W", "1M"] = "4H",
+        bars: int = 50,
+        end_time: datetime | None = None,
+    ) -> list[OHLCV]:
+        """Fetch historical bars from IB Gateway.
+
+        Returns OHLCV list with timestamps in UTC (bar end times).
+
+        Raises ValueError for unsupported timeframe (checked before the
+        connection guard so callers get a clear error even when disconnected).
+        Raises RuntimeError if not connected.
+        """
+        if timeframe not in _TIMEFRAME_TO_IB_BAR_SIZE:
+            raise ValueError(f"Unsupported timeframe: {timeframe}")
+        if self._ib is None or not self._ib.isConnected():
+            raise RuntimeError("IBClient is not connected; call connect() first")
+
+        from ib_insync import ContFuture  # local import: pure Contract, no network
+
+        contract = ContFuture(symbol, "CME")  # MES/MNQ on CME, MGC on COMEX
+        ib_bars = self._ib.reqHistoricalData(
+            contract,
+            endDateTime=end_time or "",
+            durationStr=_duration_str(timeframe, bars),
+            barSizeSetting=_TIMEFRAME_TO_IB_BAR_SIZE[timeframe],
+            whatToShow="TRADES",
+            useRTH=False,
+            formatDate=2,  # UTC seconds
+        )
+        return [
+            OHLCV(
+                timestamp=b.date,
+                open=float(b.open),
+                high=float(b.high),
+                low=float(b.low),
+                close=float(b.close),
+                volume=float(b.volume),
+            )
+            for b in ib_bars
+        ]

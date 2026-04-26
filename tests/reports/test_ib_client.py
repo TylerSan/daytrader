@@ -58,3 +58,48 @@ def test_ibclient_disconnect_closes_connection(monkeypatch):
     client.disconnect()
 
     fake_ib.disconnect.assert_called_once()
+
+
+from datetime import datetime, timezone
+
+
+def test_ibclient_get_bars_returns_ohlcv(monkeypatch):
+    """get_bars() returns list of OHLCV from ib_insync."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    fake_bar = MagicMock()
+    fake_bar.date = datetime(2026, 4, 25, 14, 0, tzinfo=timezone.utc)
+    fake_bar.open = 5240.00
+    fake_bar.high = 5252.50
+    fake_bar.low = 5238.25
+    fake_bar.close = 5246.75
+    fake_bar.volume = 142830
+
+    fake_ib.reqHistoricalData.return_value = [fake_bar]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    bars = client.get_bars(symbol="MES", timeframe="4H", bars=50)
+
+    assert len(bars) == 1
+    assert bars[0].open == 5240.00
+    assert bars[0].close == 5246.75
+    assert bars[0].volume == 142830
+
+    # Verify the IB call
+    fake_ib.reqHistoricalData.assert_called_once()
+    call_kwargs = fake_ib.reqHistoricalData.call_args.kwargs
+    assert call_kwargs["barSizeSetting"] == "4 hours"
+    assert call_kwargs["durationStr"] == "8 D"  # 50 × 4H ≈ 8 days
+
+
+def test_ibclient_get_bars_unsupported_timeframe_raises():
+    """Unsupported timeframe raises ValueError."""
+    client = IBClient()
+    with pytest.raises(ValueError, match="Unsupported timeframe"):
+        client.get_bars(symbol="MES", timeframe="3H", bars=10)
