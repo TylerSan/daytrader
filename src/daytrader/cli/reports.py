@@ -109,6 +109,17 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
         vault_root = Path(cfg.obsidian.vault_path).expanduser()
         fallback_dir = project_root / "data" / "exports"
 
+        from daytrader.reports.instruments.definitions import (
+            load_instruments,
+            tradable_symbols as get_tradable,
+        )
+
+        instruments = load_instruments(
+            str(project_root / cfg.reports.instruments_yaml)
+        )
+        all_symbols = sorted(instruments.keys())
+        tradable = get_tradable(instruments)
+
         orchestrator = Orchestrator(
             state_db=state,
             ib_client=ib,
@@ -118,8 +129,8 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
             vault_root=vault_root,
             fallback_dir=fallback_dir,
             daily_folder=cfg.obsidian.daily_folder,
-            symbols=["MES", "MNQ", "MGC"],
-            tradable_symbols=["MES", "MGC"],
+            symbols=all_symbols,
+            tradable_symbols=tradable,
         )
         result = orchestrator.run_premarket(run_at=datetime.now(timezone.utc))
 
