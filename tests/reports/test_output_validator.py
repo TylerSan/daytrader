@@ -51,6 +51,17 @@ data
 ## Breaking news / 突发新闻
 - item
 
+## F. 期货结构
+
+### F-MES
+- Settlement: ok
+- OI: ok
+- Overall: bullish
+
+### F-MGC
+- Settlement: ok
+- Overall: neutral
+
 ## C. 计划复核
 ### C-MES
 plan
@@ -134,6 +145,13 @@ ohlcv
 
 ## 市场新闻 / Breaking news
 - item
+
+## F. 期货结构 / Futures Positioning
+
+### F-MES
+data
+### F-MGC
+data
 
 ## C. 计划复核 / Plan Formation
 ### C-MES

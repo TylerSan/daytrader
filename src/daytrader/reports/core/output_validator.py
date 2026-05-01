@@ -33,6 +33,8 @@ REQUIRED_SECTIONS: dict[str, list[SectionSpec]] = {
         ["4H", "4 H", "4小时"],
         ["1H", "1 H", "1小时", "Hourly"],
         ["新闻", "News", "Breaking"],
+        # F. 期货结构 — accept multiple variants
+        ["F. 期货结构", "F-MES", "F-MNQ", "F-MGC", "Futures Positioning", "期货结构"],
         # Plan blocks for tradable instruments
         ["C-MES", "### C-MES", "C. MES", "MES Plan"],
         ["C-MGC", "### C-MGC", "C. MGC", "MGC Plan"],
