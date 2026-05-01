@@ -31,6 +31,17 @@ that proves the foundation works against real IB Gateway and real Claude CLI.
    degrade per spec §4.5 state machine. To get the full premarket flow with C
    plan formation tied to your real setup, fill `docs/trading/Contract.md` first.
 
+5. **Telegram bot** (Phase 6, optional) — to receive pushes on phone:
+   - Open Telegram → search `@BotFather` → `/newbot` → follow prompts
+   - Save the bot token, then message your bot with any text
+   - Get your chat_id: visit `https://api.telegram.org/bot<TOKEN>/getUpdates` and look for `"chat":{"id": <NUMBER>`
+   - Edit `config/secrets.yaml`: fill `telegram.bot_token` and `telegram.chat_id`
+   - Without this, run with `--no-telegram` to skip Telegram push
+
+6. **PDF system libs** (Phase 6, optional, macOS) — for PDF rendering:
+   - `brew install pango cairo libffi`
+   - Without these, run with `--no-pdf` (the orchestrator also degrades gracefully if libs are missing)
+
 ## Step 1: Smoke test in dry-run mode
 
 ```bash
@@ -153,6 +164,26 @@ grep -c "F-MES\|F-MNQ\|F-MGC" "$HOME/Documents/DayTrader Vault/Daily/$(date +%Y-
 # Expected: 3
 ```
 
+## Step 7 (Phase 6): Verify delivery
+
+After a successful run with Phase 6 deliverers configured:
+
+- A PDF appears at `data/exports/pdfs/YYYY-MM-DD-premarket.pdf` (if `brew install pango cairo libffi` was run)
+- 3 chart PNGs at `data/exports/charts/tf-stack-{MES,MNQ,MGC}-YYYY-MM-DD.png`
+- Telegram chat receives: ~3-5 text messages + 3 photos + 1 PDF document (if bot configured)
+
+To run without Telegram (e.g., before bot setup):
+
+```bash
+uv run daytrader reports run --type premarket --no-telegram
+```
+
+To skip PDF too (fastest dev iteration / no system libs):
+
+```bash
+uv run daytrader reports run --type premarket --no-telegram --no-pdf
+```
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -166,13 +197,11 @@ grep -c "F-MES\|F-MNQ\|F-MGC" "$HOME/Documents/DayTrader Vault/Daily/$(date +%Y-
 | Bars empty for some TF | IB Gateway not receiving market data | Check CME data subscription in IBKR account |
 | Subscription rate-limited | Hit Pro Max quota | Wait or temporarily switch to API backend (future Phase 7 work) |
 
-## What this run does NOT yet do (Phase 5+)
+## What this run does NOT yet do (Phase 5+ / 7+)
 
 - Other report types (intraday/EOD/weekly/night) → Phase 5
-- Telegram push (only Obsidian today) → Phase 6
-- PDF / chart rendering → Phase 6
 - Automatic launchd schedule → Phase 7
-- Anthropic Web Search tool use (Phase 4 uses existing news collector only) → Phase 4.5
+- Anthropic Web Search tool use (uses existing news collector) → Phase 4.5
 
 ## Acceptance criteria
 
