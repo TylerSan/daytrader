@@ -196,3 +196,73 @@ def test_prompt_builder_user_block_lists_tradable_symbols():
     user_text = msgs[1]["content"]
     assert "tradable" in user_text.lower()
     assert "MES" in user_text and "MGC" in user_text
+
+
+def test_prompt_builder_includes_f_section_when_futures_data_provided():
+    from daytrader.reports.futures_data.futures_section import (
+        FuturesSection, SymbolFuturesData,
+    )
+    from daytrader.reports.futures_data.basis import BasisResult
+    from daytrader.reports.futures_data.term_structure import TermStructure
+    from daytrader.reports.futures_data.volume_profile import VolumeProfile
+    from daytrader.core.ib_client import OpenInterest
+
+    ctx = ReportContext(
+        contract_status=ContractStatus.LOCK_IN_NOT_STARTED,
+        contract_text="# Contract\nfilled\n",
+        lock_in_trades_done=0,
+        lock_in_target=30,
+        cumulative_r=None,
+        last_trade_date=None,
+        last_trade_r=None,
+        streak=None,
+    )
+    fs = FuturesSection(per_symbol={
+        "MES": SymbolFuturesData(
+            symbol="MES",
+            open_interest=OpenInterest(2143820, 2131390, 12430, 0.006),
+            basis=BasisResult(5246.75, 5244.50, 2.25),
+            term_structure=TermStructure(5246.75, 5252.00, 5258.50, 5.25, 6.50, True),
+            volume_profile=VolumeProfile(5244.0, 5249.0, 5240.0, 1500000.0, 0.25),
+        ),
+    })
+    builder = PromptBuilder()
+    msgs = builder.build_premarket(
+        context=ctx,
+        bars_by_symbol_and_tf=_empty_bars_by_symbol(),
+        tradable_symbols=["MES"],
+        news_items=[],
+        run_timestamp_pt="06:00 PT",
+        run_timestamp_et="09:00 ET",
+        futures_data=fs,
+    )
+    user_text = msgs[1]["content"]
+    assert "F. 期货结构" in user_text
+    assert "12430" in user_text
+    assert "contango" in user_text
+    assert "POC=5244" in user_text
+
+
+def test_prompt_builder_omits_f_section_when_no_futures_data():
+    ctx = ReportContext(
+        contract_status=ContractStatus.NOT_CREATED,
+        contract_text=None,
+        lock_in_trades_done=0,
+        lock_in_target=30,
+        cumulative_r=None,
+        last_trade_date=None,
+        last_trade_r=None,
+        streak=None,
+    )
+    builder = PromptBuilder()
+    msgs = builder.build_premarket(
+        context=ctx,
+        bars_by_symbol_and_tf=_empty_bars_by_symbol(),
+        tradable_symbols=["MES"],
+        news_items=[],
+        run_timestamp_pt="06:00 PT",
+        run_timestamp_et="09:00 ET",
+        futures_data=None,
+    )
+    user_text = msgs[1]["content"]
+    assert "no F-section data available" in user_text
