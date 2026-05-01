@@ -6,6 +6,7 @@ dist/
 build/
 config/user.yaml
 data/db/*.db
+data/state.db
 data/tick/
 data/imports/
 data/exports/
