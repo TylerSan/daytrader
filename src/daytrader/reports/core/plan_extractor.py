@@ -73,3 +73,33 @@ class PlanExtractor:
             invalidations=invalidations,
             raw_text=report_text,
         )
+
+    def extract_per_instrument(
+        self, report_text: str, instruments: list[str]
+    ) -> dict[str, ExtractedPlan]:
+        """Extract per-instrument plans by splitting on '### C-{INSTRUMENT}' headers.
+
+        Returns a dict from symbol → ExtractedPlan. Symbols without a parseable
+        plan block are omitted.
+        """
+        result: dict[str, ExtractedPlan] = {}
+        for symbol in instruments:
+            marker = f"### C-{symbol}"
+            idx = report_text.find(marker)
+            if idx == -1:
+                continue
+            after = report_text[idx + len(marker):]
+            # Block extends until next "### C-" or "## " or end of text
+            next_block_relative = -1
+            for end_marker in ("\n### C-", "\n## "):
+                pos = after.find(end_marker)
+                if pos != -1 and (next_block_relative == -1 or pos < next_block_relative):
+                    next_block_relative = pos
+            if next_block_relative == -1:
+                block_text = after
+            else:
+                block_text = after[:next_block_relative]
+            plan = self.extract(block_text)
+            if plan is not None:
+                result[symbol] = plan
+        return result
