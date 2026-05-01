@@ -21,6 +21,12 @@ class InstrumentConfig(BaseModel):
     typical_stop_pts: float
     typical_target_pts: float
     cot_commodity: str
+    tradable: bool = False
+
+
+def tradable_symbols(instruments: dict[str, InstrumentConfig]) -> list[str]:
+    """Return symbols where tradable=True. Order is stable (insertion order)."""
+    return [sym for sym, cfg in instruments.items() if cfg.tradable]
 
 
 def load_instruments(path: str) -> dict[str, InstrumentConfig]:

@@ -36,3 +36,19 @@ def test_load_instruments_missing_file_raises(tmp_path):
     missing = tmp_path / "nonexistent.yaml"
     with pytest.raises(FileNotFoundError):
         load_instruments(str(missing))
+
+
+def test_load_instruments_tradable_flag(fixture_instruments_yaml):
+    cfg = load_instruments(str(fixture_instruments_yaml))
+    assert cfg["MES"].tradable is True
+    assert cfg["MGC"].tradable is True
+    assert cfg["MNQ"].tradable is False
+
+
+def test_tradable_subset_helper(fixture_instruments_yaml):
+    """tradable_symbols() returns only tradable=true symbols."""
+    from daytrader.reports.instruments.definitions import tradable_symbols
+    cfg = load_instruments(str(fixture_instruments_yaml))
+    result = tradable_symbols(cfg)
+    assert set(result) == {"MES", "MGC"}
+    assert "MNQ" not in result

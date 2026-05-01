@@ -10,6 +10,7 @@ instruments:
     typical_stop_pts: 8
     typical_target_pts: 16
     cot_commodity: "S&P 500 STOCK INDEX"
+    tradable: true
 
   MNQ:
     full_name: "Micro E-mini Nasdaq 100"
@@ -19,6 +20,7 @@ instruments:
     typical_stop_pts: 30
     typical_target_pts: 60
     cot_commodity: "NASDAQ MINI"
+    tradable: false
 
   MGC:
     full_name: "Micro Gold"
@@ -28,3 +30,4 @@ instruments:
     typical_stop_pts: 5
     typical_target_pts: 10
     cot_commodity: "GOLD"
+    tradable: true
