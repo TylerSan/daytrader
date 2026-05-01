@@ -132,3 +132,88 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
             ctx.exit(1)
     finally:
         ib.disconnect()
+
+
+@reports.command("pine")
+@click.option(
+    "--symbol",
+    "symbols",
+    multiple=True,
+    default=None,
+    help="One or more symbols to render (repeat the flag). Defaults to "
+         "all symbols in instruments.yaml.",
+)
+@click.pass_context
+def pine_cmd(ctx: click.Context, symbols: tuple[str, ...]) -> None:
+    """Generate Pine Script files of key levels for TradingView paste-in.
+
+    Output: data/exports/pine/levels-{SYMBOL}-{YYYY-MM-DD}.pine
+    Per the user contract, all instruments in instruments.yaml are rendered
+    (MES + MGC tradable, MNQ context-only — TradingView gets levels for all).
+
+    Workflow:
+      1. Run this command (5-10 sec for 3 symbols)
+      2. Open TradingView, switch to MES (or ES) chart
+      3. Open Pine Editor → paste contents of levels-MES-DATE.pine
+      4. "Add to chart" → hlines appear
+      5. Repeat for MGC + MNQ
+    """
+    from datetime import date as date_cls
+    from pathlib import Path
+
+    from daytrader.core.config import load_config
+    from daytrader.core.ib_client import IBClient
+    from daytrader.reports.delivery.pine_renderer import (
+        LevelExtractor,
+        PineScriptRenderer,
+    )
+    from daytrader.reports.instruments.definitions import load_instruments
+
+    project_root = Path(ctx.obj["project_root"]) if ctx.obj else Path.cwd()
+    cfg = load_config(
+        default_config=project_root / "config" / "default.yaml",
+        user_config=project_root / "config" / "user.yaml",
+    )
+
+    if symbols:
+        target_symbols = list(symbols)
+    else:
+        instruments = load_instruments(
+            str(project_root / cfg.reports.instruments_yaml)
+        )
+        target_symbols = sorted(instruments.keys())
+
+    output_dir = project_root / "data" / "exports" / "pine"
+    today = date_cls.today()
+
+    ib = IBClient(
+        host=cfg.reports.ib.host,
+        port=cfg.reports.ib.port,
+        client_id=cfg.reports.ib.client_id + 100,  # avoid conflict with `run`
+    )
+    ib.connect()
+    try:
+        extractor = LevelExtractor(ib_client=ib)
+        renderer = PineScriptRenderer(output_dir=output_dir)
+
+        click.echo(f"Generating Pine for {len(target_symbols)} symbols → {output_dir}/")
+        for symbol in target_symbols:
+            try:
+                levels = extractor.extract(symbol=symbol)
+                path = renderer.render_and_save(
+                    levels=levels, symbol=symbol, today=today
+                )
+                non_null = sum(
+                    1 for v in (
+                        levels.prior_day_high, levels.prior_day_low,
+                        levels.prior_day_close, levels.weekly_high,
+                        levels.weekly_low,
+                    ) if v is not None
+                )
+                click.echo(f"  ✓ {symbol}: {non_null}/5 levels → {path.name}")
+            except Exception as e:
+                click.echo(f"  ✗ {symbol}: {type(e).__name__}: {e}", err=True)
+    finally:
+        ib.disconnect()
+
+    click.echo(f"\nDone. Paste each .pine file into TradingView Pine Editor.")

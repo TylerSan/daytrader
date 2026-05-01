@@ -74,3 +74,12 @@ def test_reports_run_premarket_no_claude_cli_clearly_errors(monkeypatch, tmp_pat
     assert result.exit_code != 0
     combined = (result.output or "").lower()
     assert "claude" in combined or "not found" in combined or "path" in combined
+
+
+def test_reports_pine_command_registered():
+    """`daytrader reports pine --help` shows the command + --symbol option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["reports", "pine", "--help"])
+    assert result.exit_code == 0
+    assert "--symbol" in result.output
+    assert "Pine Script" in result.output or "TradingView" in result.output
