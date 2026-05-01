@@ -235,18 +235,35 @@ class IBClient:
         )
 
     def get_open_interest(self, symbol: str) -> OpenInterest:
-        """Fetch most recent OPEN_INTEREST values (today + yesterday)."""
+        """Fetch most recent OPEN_INTEREST values (today + yesterday).
+
+        IB rejects whatToShow="OPEN_INTEREST" for ContFuture (continuous-future)
+        contracts — supported only for Future (specific contract month). So we:
+          1. Build ContFuture and qualifyContracts to resolve to front month
+          2. Reconstruct as a Future with the qualified attributes (carrying conId)
+          3. Request OI on the Future
+        """
         if self._ib is None or not self._ib.isConnected():
             raise RuntimeError("IBClient is not connected; call connect() first")
 
-        from ib_insync import ContFuture
+        from ib_insync import ContFuture, Future
         contract = ContFuture(symbol, _exchange_for(symbol))
         try:
             qualified = self._ib.qualifyContracts(contract)
             if qualified and hasattr(qualified[0], "conId") and qualified[0].conId:
-                contract = qualified[0]
+                cf = qualified[0]
+                # OPEN_INTEREST not supported on ContFuture; convert to Future.
+                future_contract = Future(
+                    symbol=cf.symbol,
+                    lastTradeDateOrContractMonth=cf.lastTradeDateOrContractMonth,
+                    exchange=cf.exchange,
+                    currency=cf.currency,
+                )
+                # Carry the resolved conId so IB doesn't need to re-qualify.
+                future_contract.conId = cf.conId
+                contract = future_contract
         except Exception:
-            pass
+            pass  # fall back to ContFuture; IB will likely still reject OI for it
 
         bars = self._ib.reqHistoricalData(
             contract,
