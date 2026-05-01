@@ -14,12 +14,15 @@ dependencies = [
     "plotly>=5.18",
     "yfinance>=0.2.36",
     "jinja2>=3.1",
+    "markdown-it-py>=3.0",
     "anthropic>=0.40",
     "matplotlib>=3.8",
     "pyarrow>=14.0",
     "databento>=0.42",
     "lib-pybroker>=1.0",
+    "python-telegram-bot>=21",
     "quantstats>=0.0.62",
+    "weasyprint>=60",
 ]
 
 [project.optional-dependencies]
@@ -45,3 +48,9 @@ packages = ["src/daytrader"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+]
