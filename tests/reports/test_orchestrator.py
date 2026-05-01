@@ -183,3 +183,66 @@ def test_orchestrator_marks_failed_on_pipeline_exception(tmp_path):
     conn.close()
     assert row["status"] == "failed"
     assert "ConnectionError" in row["failure_reason"]
+
+
+def test_orchestrator_invokes_pdf_and_telegram_when_provided(tmp_path):
+    """When deliverers are wired, they get called with the report content."""
+    fake_ib = MagicMock()
+    fake_ib.is_healthy.return_value = True
+    fake_ib.get_bars.return_value = [_ohlcv()]
+    from daytrader.core.ib_client import OpenInterest
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
+
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result()
+
+    fake_pdf = MagicMock()
+    fake_pdf.render_to_pdf.return_value = tmp_path / "out.pdf"
+    (tmp_path / "out.pdf").write_bytes(b"%PDF-1.4 fake")
+
+    fake_charts = MagicMock()
+    fake_charts.render_all.return_value = MagicMock(
+        tf_stack_paths={"MES": tmp_path / "c.png"}
+    )
+    (tmp_path / "c.png").write_bytes(b"\x89PNG fake")
+
+    fake_telegram = MagicMock()
+    async def _push(*args, **kwargs):
+        return MagicMock(success=True, message_count=3)
+    fake_telegram.push = _push
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    orchestrator.pdf_renderer = fake_pdf
+    orchestrator.chart_renderer = fake_charts
+    orchestrator.telegram_pusher = fake_telegram
+
+    result = orchestrator.run_premarket(
+        run_at=datetime(2026, 4, 25, 13, tzinfo=timezone.utc),
+    )
+    assert result.success is True
+    fake_pdf.render_to_pdf.assert_called_once()
+    fake_charts.render_all.assert_called_once()
+
+
+def test_orchestrator_succeeds_when_pdf_renderer_fails(tmp_path):
+    """PDF failure (e.g., missing libs) does NOT block the pipeline."""
+    fake_ib = MagicMock()
+    fake_ib.is_healthy.return_value = True
+    fake_ib.get_bars.return_value = [_ohlcv()]
+    from daytrader.core.ib_client import OpenInterest
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
+
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result()
+
+    fake_pdf = MagicMock()
+    fake_pdf.render_to_pdf.side_effect = OSError("missing libpango")
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    orchestrator.pdf_renderer = fake_pdf
+
+    result = orchestrator.run_premarket(
+        run_at=datetime(2026, 4, 25, 13, tzinfo=timezone.utc),
+    )
+    # PDF failed but the report still succeeded
+    assert result.success is True

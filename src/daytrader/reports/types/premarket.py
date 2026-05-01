@@ -32,6 +32,7 @@ class GenerationOutcome:
     report_text: str
     ai_result: AIResult
     validation: ValidationResult
+    bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]] | None = None
 
 
 PREMARKET_TFS = ("1W", "1D", "4H", "1H")
@@ -149,4 +150,5 @@ class PremarketGenerator:
             report_text=ai_result.text,
             ai_result=ai_result,
             validation=validation,
+            bars_by_symbol_and_tf=bars_by_symbol_and_tf,
         )

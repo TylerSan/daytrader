@@ -50,6 +50,9 @@ class Orchestrator:
         daily_folder: str = "Daily",
         symbols: list[str] | None = None,
         tradable_symbols: list[str] | None = None,
+        chart_renderer=None,        # ChartRenderer | None
+        pdf_renderer=None,          # PDFRenderer | None
+        telegram_pusher=None,       # TelegramPusher | None
     ) -> None:
         if symbols is None:
             symbols = ["MES"]
@@ -65,6 +68,9 @@ class Orchestrator:
         self.daily_folder = daily_folder
         self.symbols = list(symbols)
         self.tradable_symbols = list(tradable_symbols)
+        self.chart_renderer = chart_renderer
+        self.pdf_renderer = pdf_renderer
+        self.telegram_pusher = telegram_pusher
 
     def run_premarket(self, run_at: datetime) -> PipelineResult:
         """Execute one premarket pipeline run."""
@@ -163,6 +169,44 @@ class Orchestrator:
                     source_report_path=str(write_result.path),
                     created_at=run_at_utc,
                 )
+
+            # Phase 6 delivery: charts + PDF + Telegram (best-effort; failures
+            # don't block the success path — Obsidian write is the source of truth).
+            chart_paths: list[Path] = []
+            if self.chart_renderer is not None and outcome.bars_by_symbol_and_tf:
+                try:
+                    artifacts = self.chart_renderer.render_all(
+                        bars_by_symbol_and_tf=outcome.bars_by_symbol_and_tf,
+                        today=date_et,
+                    )
+                    chart_paths = list(artifacts.tf_stack_paths.values())
+                except Exception as e:
+                    import sys
+                    print(f"[orchestrator] chart render failed: {e}", file=sys.stderr)
+
+            pdf_path: Path | None = None
+            if self.pdf_renderer is not None:
+                try:
+                    pdf_path = self.pdf_renderer.render_to_pdf(
+                        markdown_text=outcome.report_text,
+                        title=f"Premarket {date_et}",
+                        filename_stem=f"{date_et}-premarket",
+                    )
+                except Exception as e:
+                    import sys
+                    print(f"[orchestrator] PDF render failed: {e}", file=sys.stderr)
+
+            if self.telegram_pusher is not None:
+                try:
+                    import asyncio
+                    asyncio.run(self.telegram_pusher.push(
+                        text_messages=[outcome.report_text],
+                        chart_paths=chart_paths,
+                        pdf_path=pdf_path,
+                    ))
+                except Exception as e:
+                    import sys
+                    print(f"[orchestrator] telegram push failed: {e}", file=sys.stderr)
 
             duration = time.perf_counter() - start
             self.state_db.update_report_status(
