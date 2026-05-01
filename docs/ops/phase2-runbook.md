@@ -48,8 +48,8 @@ uv run daytrader reports run --type premarket
 What it does:
 1. Verifies `claude` CLI is on PATH (fails fast if missing)
 2. Loads config (no API key needed in Phase 2)
-3. Connects to IB Gateway on `127.0.0.1:4002`
-4. Fetches MES bars: 52 weekly + 200 daily + 50 4H + 24 1H
+3. Connects to IB Gateway on `127.0.0.1:7496` (or 4002 for IB Gateway)
+4. Fetches bars for ALL symbols in `instruments.yaml` (MES + MNQ + MGC by default): 52 weekly + 200 daily + 50 4H + 24 1H per symbol — 12 IB requests per run
 5. Loads Contract.md (degrades gracefully if missing)
 6. Builds prompt as a flattened `[SYSTEM] / [USER]` text block
 7. Invokes `claude -p` subprocess (~5-30 seconds, depends on subscription queue)
@@ -108,6 +108,35 @@ uv run daytrader reports run --type premarket
 
 Expected: `Report already generated today (skipped).` Exit 0. AI not called again.
 
+## Step 5 (Phase 3): Verify multi-instrument coverage
+
+After a successful run, the generated markdown file should contain:
+
+- Three per-instrument multi-TF blocks: MES, MNQ, MGC (each with W/D/4H/1H)
+- Two C-block plans: C-MES and C-MGC (NOT C-MNQ — context-only)
+- One integrated A-section recommendation
+
+Quick verification:
+
+```bash
+grep -c "📊 MES\|📊 MNQ\|📊 MGC" "$HOME/Documents/DayTrader Vault/Daily/$(date +%Y-%m-%d)-premarket.md"
+# Expected: 3
+```
+
+```bash
+uv run python -c "
+from daytrader.core.state import StateDB
+db = StateDB('data/state.db')
+mes = db.get_plan_for_date('$(date +%Y-%m-%d)', 'MES')
+mgc = db.get_plan_for_date('$(date +%Y-%m-%d)', 'MGC')
+mnq = db.get_plan_for_date('$(date +%Y-%m-%d)', 'MNQ')
+print('MES plan:', dict(mes) if mes else 'none')
+print('MGC plan:', dict(mgc) if mgc else 'none')
+print('MNQ plan:', 'none (context-only) ✓' if mnq is None else 'UNEXPECTED:', dict(mnq) if mnq else 'none')
+"
+# Expected: MES + MGC plans populated; MNQ none (context-only ✓)
+```
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -121,10 +150,10 @@ Expected: `Report already generated today (skipped).` Exit 0. AI not called agai
 | Bars empty for some TF | IB Gateway not receiving market data | Check CME data subscription in IBKR account |
 | Subscription rate-limited | Hit Pro Max quota | Wait or temporarily switch to API backend (future Phase 7 work) |
 
-## What this run does NOT yet do (Phase 3+)
+## What this run does NOT yet do (Phase 4+)
 
-- Multi-instrument (only MES) → Phase 3
-- F. futures structure (no OI/COT/basis/term/VP) → Phase 4
+- F. 期货结构 (no OI/COT/basis/term/VolumeProfile) → Phase 4
+- Anthropic Web Search for breaking news → Phase 4
 - Other report types (intraday/EOD/weekly/night) → Phase 5
 - Telegram push (only Obsidian today) → Phase 6
 - PDF / chart rendering → Phase 6
@@ -136,6 +165,6 @@ Phase 2 is "done" when:
 1. ☐ `daytrader reports run --type premarket` succeeds without error
 2. ☐ A markdown file is created in your Obsidian Daily folder
 3. ☐ The file passes a manual sanity read — sections look correct, numbers are real
-4. ☐ The plan extraction populates `state.db.plans` with valid setup/entry/stop/target
+4. ☐ The plan extraction populates `state.db.plans` with one row per TRADABLE instrument (MES + MGC; NOT MNQ which is context-only)
 5. ☐ Idempotent re-run within the same ET day prints "skipped" and does not call AI
 6. ☐ Estimated cost in the `reports` row is 0.0 (claude -p backend)
