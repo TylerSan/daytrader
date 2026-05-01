@@ -83,3 +83,16 @@ def test_reports_pine_command_registered():
     assert result.exit_code == 0
     assert "--symbol" in result.output
     assert "Pine Script" in result.output or "TradingView" in result.output
+
+
+def test_reports_run_accepts_no_telegram_no_pdf_flags():
+    """`daytrader reports run --type premarket --no-telegram --no-pdf` is valid CLI."""
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "reports", "run", "--type", "premarket",
+        "--no-telegram", "--no-pdf", "--help",
+    ])
+    # --help short-circuits the run; we just want to ensure click doesn't reject the flags
+    assert result.exit_code == 0
+    assert "--no-telegram" in result.output
+    assert "--no-pdf" in result.output

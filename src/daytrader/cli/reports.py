@@ -57,8 +57,20 @@ def dry_run(report_type: str) -> None:
     type=click.Choice(VALID_TYPES, case_sensitive=False),
     help="Report type to generate (Phase 2: only 'premarket' is implemented).",
 )
+@click.option(
+    "--no-telegram",
+    is_flag=True,
+    default=False,
+    help="Skip Telegram push (still writes Obsidian + PDF + charts).",
+)
+@click.option(
+    "--no-pdf",
+    is_flag=True,
+    default=False,
+    help="Skip PDF rendering (faster runs for testing).",
+)
 @click.pass_context
-def run_cmd(ctx: click.Context, report_type: str) -> None:
+def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: bool) -> None:
     """Run a real report end-to-end (touches IB Gateway and Anthropic API).
 
     Phase 2 implements `--type premarket` only. Other types raise NotImplementedError.
@@ -120,6 +132,39 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
         all_symbols = sorted(instruments.keys())
         tradable = get_tradable(instruments)
 
+        from daytrader.reports.delivery.chart_renderer import ChartRenderer
+        from daytrader.reports.delivery.pdf_renderer import PDFRenderer
+        from daytrader.reports.delivery.telegram_pusher import TelegramPusher
+        from daytrader.reports.core.secrets import load_secrets, SecretsError
+
+        chart_renderer = ChartRenderer(
+            output_dir=project_root / "data" / "exports" / "charts",
+        )
+
+        pdf_renderer = None
+        if not no_pdf:
+            try:
+                pdf_renderer = PDFRenderer(
+                    output_dir=project_root / "data" / "exports" / "pdfs",
+                )
+            except Exception as e:
+                click.echo(f"PDF renderer unavailable: {e}", err=True)
+
+        telegram_pusher = None
+        if not no_telegram:
+            try:
+                secrets = load_secrets(str(project_root / "config" / "secrets.yaml"))
+                from telegram import Bot
+                bot = Bot(token=secrets.telegram_bot_token)
+                telegram_pusher = TelegramPusher(
+                    bot=bot,
+                    chat_id=secrets.telegram_chat_id,
+                )
+            except SecretsError as e:
+                click.echo(f"Telegram disabled: {e}", err=True)
+            except Exception as e:
+                click.echo(f"Telegram setup failed: {e}", err=True)
+
         orchestrator = Orchestrator(
             state_db=state,
             ib_client=ib,
@@ -131,6 +176,9 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
             daily_folder=cfg.obsidian.daily_folder,
             symbols=all_symbols,
             tradable_symbols=tradable,
+            chart_renderer=chart_renderer,
+            pdf_renderer=pdf_renderer,
+            telegram_pusher=telegram_pusher,
         )
         result = orchestrator.run_premarket(run_at=datetime.now(timezone.utc))
 
