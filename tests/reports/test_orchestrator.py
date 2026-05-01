@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from daytrader.core.state import StateDB
-from daytrader.core.ib_client import OHLCV
+from daytrader.core.ib_client import OHLCV, OpenInterest
 from daytrader.reports.core.context_loader import ContractStatus, ReportContext
 from daytrader.reports.core.orchestrator import (
     Orchestrator,
@@ -81,6 +81,7 @@ def test_orchestrator_run_premarket_persists_per_instrument_plans(tmp_path):
     fake_ib = MagicMock()
     fake_ib.is_healthy.return_value = True
     fake_ib.get_bars.return_value = [_ohlcv()]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
 
     fake_ai = MagicMock()
     fake_ai.call.return_value = _ai_result()
@@ -123,6 +124,7 @@ def test_orchestrator_marks_validation_failure(tmp_path):
     fake_ib = MagicMock()
     fake_ib.is_healthy.return_value = True
     fake_ib.get_bars.return_value = [_ohlcv()]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
 
     fake_ai = MagicMock()
     fake_ai.call.return_value = _ai_result(text="(too short)")
@@ -139,6 +141,7 @@ def test_orchestrator_idempotency_skips_repeat(tmp_path):
     fake_ib = MagicMock()
     fake_ib.is_healthy.return_value = True
     fake_ib.get_bars.return_value = [_ohlcv()]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
     fake_ai = MagicMock()
     fake_ai.call.return_value = _ai_result()
 

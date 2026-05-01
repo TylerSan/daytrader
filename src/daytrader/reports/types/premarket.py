@@ -22,6 +22,9 @@ from daytrader.reports.core.output_validator import (
     ValidationResult,
 )
 from daytrader.reports.core.prompt_builder import PromptBuilder
+from daytrader.reports.futures_data.futures_section import (
+    FuturesSection, build_futures_section,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +49,10 @@ class PremarketGenerator:
         tradable_symbols: list[str],
         prompt_builder: PromptBuilder | None = None,
         validator: OutputValidator | None = None,
+        underlying_price_fetcher=None,
+        term_price_fetcher=None,
+        tick_sizes: dict[str, float] | None = None,
+        news_collector=None,
     ) -> None:
         if not symbols:
             raise ValueError("symbols must be non-empty")
@@ -58,6 +65,10 @@ class PremarketGenerator:
         self.tradable_symbols = list(tradable_symbols)
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.validator = validator or OutputValidator()
+        self.underlying_price_fetcher = underlying_price_fetcher
+        self.term_price_fetcher = term_price_fetcher
+        self.tick_sizes = tick_sizes
+        self.news_collector = news_collector
 
     def generate(
         self,
@@ -76,6 +87,47 @@ class PremarketGenerator:
                     bars=BARS_PER_TF[tf],
                 )
 
+        # Build F-section data (best-effort; per-symbol failures captured inside)
+        futures_data: FuturesSection | None = None
+        try:
+            tick_sizes = self.tick_sizes or {s: 0.25 for s in self.symbols}
+            underlying_prices = (
+                self.underlying_price_fetcher(self.symbols)
+                if self.underlying_price_fetcher else {}
+            )
+            term_prices = (
+                self.term_price_fetcher(self.symbols)
+                if self.term_price_fetcher else {}
+            )
+            futures_data = build_futures_section(
+                ib_client=self.ib_client,
+                symbols=self.symbols,
+                underlying_prices=underlying_prices,
+                term_prices=term_prices,
+                tick_sizes=tick_sizes,
+            )
+        except Exception as exc:
+            import sys
+            print(
+                f"[premarket_generator] WARNING: F-section build failed: {exc}",
+                file=sys.stderr,
+            )
+            futures_data = None
+
+        # Fetch news (best-effort)
+        if news_items is None:
+            news_items = []
+            if self.news_collector is not None:
+                try:
+                    news_items = self.news_collector()
+                except Exception as exc:
+                    import sys
+                    print(
+                        f"[premarket_generator] WARNING: news fetch failed: {exc}",
+                        file=sys.stderr,
+                    )
+                    news_items = []
+
         messages = self.prompt_builder.build_premarket(
             context=context,
             bars_by_symbol_and_tf=bars_by_symbol_and_tf,
@@ -83,6 +135,7 @@ class PremarketGenerator:
             news_items=news_items or [],
             run_timestamp_pt=run_timestamp_pt,
             run_timestamp_et=run_timestamp_et,
+            futures_data=futures_data,
         )
 
         ai_result = self.ai_analyst.call(
