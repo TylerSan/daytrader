@@ -18,23 +18,44 @@ trades_done: 0/30
 
 ## Multi-TF Analysis
 
-### 1W
-data here
+### 📊 MES
+#### W
+data
+#### D
+data
+#### 4H
+data
+#### 1H
+data
 
-### 1D
-data here
+### 📊 MNQ
+#### W
+data
+#### D
+data
+#### 4H
+data
+#### 1H
+data
 
-### 4H
-data here
-
-### 1H
-data here
+### 📊 MGC
+#### W
+data
+#### D
+data
+#### 4H
+data
+#### 1H
+data
 
 ## Breaking news / 突发新闻
-- item 1
+- item
 
 ## C. 计划复核
-plan here
+### C-MES
+plan
+### C-MGC
+plan
 
 ## B. 市场叙事
 narrative
@@ -71,29 +92,53 @@ def test_validator_unknown_report_type_raises():
 
 
 PREMARKET_SAMPLE_LIVE_FORMAT = """
-# 盘前每日报告 — MES
+# 盘前每日报告 — 多标的
 
 ## Lock-in metadata
 trades_done: 0/30
 
 ## Multi-TF Analysis
 
-### W — Bar end 13:00 PT
+### 📊 MES
+#### W — Bar end 13:00 PT
 ohlcv data
 
-### D — Bar end 13:00 PT
+#### D — Bar end 13:00 PT
 ohlcv data
 
-### 4H — bar
+#### 4H — bar
 ohlcv data
 
-### 1H — bar
+#### 1H — bar
 ohlcv data
+
+### 📊 MNQ
+#### W
+ohlcv
+#### D
+ohlcv
+#### 4H
+ohlcv
+#### 1H
+ohlcv
+
+### 📊 MGC
+#### W
+ohlcv
+#### D
+ohlcv
+#### 4H
+ohlcv
+#### 1H
+ohlcv
 
 ## 市场新闻 / Breaking news
 - item
 
 ## C. 计划复核 / Plan Formation
+### C-MES
+plan
+### C-MGC
 plan
 
 ## B. 市场叙事 / Market Narrative
@@ -117,12 +162,28 @@ def test_validator_accepts_alternate_tf_labels_W_and_D():
 
 def test_validator_reports_human_readable_label_when_alternates_all_missing():
     """When a slot has alternates and none match, missing label shows the alternates."""
-    no_weekly = PREMARKET_SAMPLE_LIVE_FORMAT.replace("### W — Bar end 13:00 PT\nohlcv data", "")
+    no_weekly = PREMARKET_SAMPLE_LIVE_FORMAT.replace("#### W — Bar end 13:00 PT\nohlcv data", "")
     # Also strip any other 'W' / 'Weekly' markers so the slot truly has no match
-    no_weekly = no_weekly.replace("Weekly", "x").replace("周线", "x").replace("1W", "x")
+    no_weekly = no_weekly.replace("#### W\n", "#### x\n").replace("Weekly", "x").replace("周线", "x").replace("1W", "x")
     validator = OutputValidator()
     result = validator.validate(no_weekly, report_type="premarket")
     assert result.ok is False
     # Missing entry should mention the alternative form
     missing_str = " ".join(result.missing)
     assert "W" in missing_str or "1W" in missing_str or "Weekly" in missing_str
+
+
+def test_validator_premarket_fails_when_mes_section_missing():
+    no_mes = PREMARKET_SAMPLE_VALID.replace("📊 MES", "x").replace("MES", "x")
+    validator = OutputValidator()
+    result = validator.validate(no_mes, report_type="premarket")
+    assert result.ok is False
+    missing_str = " ".join(result.missing)
+    assert "MES" in missing_str
+
+
+def test_validator_premarket_fails_when_c_mes_missing():
+    no_c_mes = PREMARKET_SAMPLE_VALID.replace("### C-MES\nplan", "")
+    validator = OutputValidator()
+    result = validator.validate(no_c_mes, report_type="premarket")
+    assert result.ok is False

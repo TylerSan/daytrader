@@ -21,20 +21,24 @@ SectionSpec = str | list[str]
 REQUIRED_SECTIONS: dict[str, list[SectionSpec]] = {
     "premarket": [
         "Lock-in",
-        # Weekly TF: accept "1W", "W ", "W(", "Weekly", "周线"
-        ["1W", "## W", "### W ", "### W(", "Weekly", "周线"],
-        # Daily TF: accept "1D", "D ", "D(", "Daily", "日线"
-        ["1D", "## D", "### D ", "### D(", "Daily", "日线"],
-        # 4-hour TF: accept "4H", "4 H", "4小时"
+        # Per-symbol Multi-TF — each symbol must appear in headers
+        ["MES", "📊 MES"],
+        ["MNQ", "📊 MNQ"],
+        ["MGC", "📊 MGC"],
+        # Per symbol per TF — at least the labels must be present somewhere
+        # (we only require ONE TF per symbol to avoid over-strictness during
+        # AI variance; multi-TF coverage is enforced by the template)
+        ["1W", "## W", "### W ", "Weekly", "周线"],
+        ["1D", "## D", "### D ", "Daily", "日线"],
         ["4H", "4 H", "4小时"],
-        # 1-hour TF: accept "1H", "1 H", "1小时", "Hourly"
         ["1H", "1 H", "1小时", "Hourly"],
-        # Breaking news section: accept "新闻", "News", "Breaking"
         ["新闻", "News", "Breaking"],
-        "C.",          # "C. 计划复核"
-        "B.",          # "B. 市场叙事"
-        "A.",          # "A. 建议"
-        # Data snapshot: accept Chinese or English variants
+        # Plan blocks for tradable instruments
+        ["C-MES", "### C-MES", "C. MES", "MES Plan"],
+        ["C-MGC", "### C-MGC", "C. MGC", "MGC Plan"],
+        "C.",
+        "B.",
+        "A.",
         ["数据快照", "Data snapshot", "Snapshot"],
     ],
 }
