@@ -15,13 +15,14 @@ Generate the report in **Chinese (Simplified)**. Preserve technical terms in Eng
    - **MGC** section: W → D → 4H → 1H
 3. **Cross-asset narrative** — short paragraph relating MES + MNQ + MGC posture (risk-on/off, sector rotation, dollar/gold inverse)
 4. **Breaking news** (past ~12h overnight Asia + Europe + early US pre-market) — single combined section
-5. **C. 计划复核 / Plan Formation** — **two** plan blocks:
+5. **F. 期货结构 / Futures Positioning** — per-symbol paragraphs interpreting the raw OI / basis / term / VP data into bullish/bearish positioning narrative
+6. **C. 计划复核 / Plan Formation** — **two** plan blocks:
    - C-MES (MES tradable plan)
    - C-MGC (MGC tradable plan)
    - NOTE: NO C-MNQ block (MNQ is context-only)
-6. **B. 市场叙事 / Market Narrative** (combined, describing past activity across all three)
-7. **A. 建议 / Recommendation** (A-2 + A-3 mixed; integrated overview, not per-symbol)
-8. **数据快照 / Data snapshot** (table covering all three symbols)
+7. **B. 市场叙事 / Market Narrative** (combined, describing past activity across all three)
+8. **A. 建议 / Recommendation** (A-2 + A-3 mixed; integrated overview, not per-symbol)
+9. **数据快照 / Data snapshot** (table covering all three symbols)
 
 ## Per-Instrument Section Template
 
@@ -45,6 +46,20 @@ For each of MES, MNQ, MGC, present:
 [same structure]
 
 **多 TF 一致性 (HTF↔LTF alignment)**: ___
+
+## F. Futures Positioning Format
+
+For each symbol (MES, MNQ, MGC), generate a paragraph that integrates the raw data into a positioning narrative under "## F. 期货结构". Use this structure:
+
+### F-{SYMBOL}
+
+- **Settlement / OI**: [today's settlement, OI delta value + direction interpretation, e.g. "价涨 OI 涨 → 真多头资金流入" or "价跌 OI 涨 → 新空头进场"]
+- **Basis**: [spread value + interpretation, e.g. "+0.5 pt within normal range -2 to +3 → 中性"]
+- **Term structure**: [contango/backwardation + spreads + carry interpretation]
+- **Volume profile**: [POC/VAH/VAL + current price relationship, e.g. "当前价 5246.75 在 POC 上方、VAH 下方 → 公允区上沿"]
+- **综合定性 / Overall posture**: [bullish positioning (强度: 强/中/弱) | neutral | bearish positioning (强度: ...)]
+
+For MNQ (context-only): keep the F-MNQ block short — focus on whether MNQ posture confirms or contradicts MES posture.
 
 ## C. Plan Formation — TRADABLE INSTRUMENTS ONLY
 
@@ -87,7 +102,7 @@ A-1 (direct "buy now / sell now" call) is **permanently disabled**.
 
 ## Length Limit
 
-Max ~9,000 characters when no F section is generated (Phase 3). If approaching limit, compress B (use bullets), preserve all multi-TF + C-MES + C-MGC + A.
+Max ~12,000 characters with F section. If approaching limit, compress B (use bullets), preserve all multi-TF + F-* + C-MES + C-MGC + A.
 
 ---
 
