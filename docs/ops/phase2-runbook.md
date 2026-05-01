@@ -137,6 +137,22 @@ print('MNQ plan:', 'none (context-only) ✓' if mnq is None else 'UNEXPECTED:', 
 # Expected: MES + MGC plans populated; MNQ none (context-only ✓)
 ```
 
+## Step 6 (Phase 4): Verify F. 期货结构 in report
+
+After a successful Phase 4 run, the markdown should contain:
+
+- "## F. 期货结构" header
+- "### F-MES" subsection with OI, Basis, Term structure, Volume profile fields
+- "### F-MNQ" and "### F-MGC" similarly
+- AI-generated 综合定性 (overall posture) per symbol
+
+Quick verification:
+
+```bash
+grep -c "F-MES\|F-MNQ\|F-MGC" "$HOME/Documents/DayTrader Vault/Daily/$(date +%Y-%m-%d)-premarket.md"
+# Expected: 3
+```
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -150,14 +166,13 @@ print('MNQ plan:', 'none (context-only) ✓' if mnq is None else 'UNEXPECTED:', 
 | Bars empty for some TF | IB Gateway not receiving market data | Check CME data subscription in IBKR account |
 | Subscription rate-limited | Hit Pro Max quota | Wait or temporarily switch to API backend (future Phase 7 work) |
 
-## What this run does NOT yet do (Phase 4+)
+## What this run does NOT yet do (Phase 5+)
 
-- F. 期货结构 (no OI/COT/basis/term/VolumeProfile) → Phase 4
-- Anthropic Web Search for breaking news → Phase 4
 - Other report types (intraday/EOD/weekly/night) → Phase 5
 - Telegram push (only Obsidian today) → Phase 6
 - PDF / chart rendering → Phase 6
 - Automatic launchd schedule → Phase 7
+- Anthropic Web Search tool use (Phase 4 uses existing news collector only) → Phase 4.5
 
 ## Acceptance criteria
 
