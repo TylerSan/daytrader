@@ -243,3 +243,34 @@ def test_ibclient_unknown_symbol_raises():
 
     with pytest.raises(ValueError, match="Unknown symbol"):
         _exchange_for("BOGUS")
+
+
+def test_ibclient_get_open_interest_returns_recent_oi(monkeypatch):
+    """get_open_interest fetches OPEN_INTEREST bars and returns most recent values."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    bar_today = MagicMock()
+    bar_today.date = datetime(2026, 4, 25, tzinfo=timezone.utc)
+    bar_today.close = 2143820.0
+    bar_today.volume = 0.0
+    bar_yesterday = MagicMock()
+    bar_yesterday.date = datetime(2026, 4, 24, tzinfo=timezone.utc)
+    bar_yesterday.close = 2131390.0
+    bar_yesterday.volume = 0.0
+
+    fake_ib.reqHistoricalData.return_value = [bar_yesterday, bar_today]
+    fake_ib.qualifyContracts.return_value = [MagicMock(conId=12345)]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    oi = client.get_open_interest(symbol="MES")
+
+    assert oi.today == pytest.approx(2143820.0)
+    assert oi.yesterday == pytest.approx(2131390.0)
+    assert oi.delta == pytest.approx(12430.0)
+    assert oi.delta_pct == pytest.approx(12430.0 / 2131390.0)

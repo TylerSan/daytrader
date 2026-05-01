@@ -39,6 +39,15 @@ class Snapshot:
     last: float
 
 
+@dataclass(frozen=True)
+class OpenInterest:
+    """Open interest snapshot — today vs yesterday."""
+    today: float
+    yesterday: float
+    delta: float
+    delta_pct: float
+
+
 _TIMEFRAME_TO_IB_BAR_SIZE: dict[str, str] = {
     "1m": "1 min",
     "15m": "15 mins",
@@ -223,4 +232,42 @@ class IBClient:
             bid=float(ticker.bid) if ticker.bid else 0.0,
             ask=float(ticker.ask) if ticker.ask else 0.0,
             last=float(ticker.last) if ticker.last else 0.0,
+        )
+
+    def get_open_interest(self, symbol: str) -> OpenInterest:
+        """Fetch most recent OPEN_INTEREST values (today + yesterday)."""
+        if self._ib is None or not self._ib.isConnected():
+            raise RuntimeError("IBClient is not connected; call connect() first")
+
+        from ib_insync import ContFuture
+        contract = ContFuture(symbol, _exchange_for(symbol))
+        try:
+            qualified = self._ib.qualifyContracts(contract)
+            if qualified and hasattr(qualified[0], "conId") and qualified[0].conId:
+                contract = qualified[0]
+        except Exception:
+            pass
+
+        bars = self._ib.reqHistoricalData(
+            contract,
+            endDateTime="",
+            durationStr="3 D",
+            barSizeSetting="1 day",
+            whatToShow="OPEN_INTEREST",
+            useRTH=False,
+            formatDate=2,
+            timeout=60,
+        )
+        if len(bars) < 2:
+            raise RuntimeError(f"Insufficient OI bars for {symbol}: got {len(bars)}")
+
+        today = float(bars[-1].close)
+        yesterday = float(bars[-2].close)
+        delta = today - yesterday
+        delta_pct = delta / yesterday if yesterday else 0.0
+        return OpenInterest(
+            today=today,
+            yesterday=yesterday,
+            delta=delta,
+            delta_pct=delta_pct,
         )
