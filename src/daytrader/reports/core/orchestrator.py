@@ -48,8 +48,13 @@ class Orchestrator:
         vault_root: Path,
         fallback_dir: Path,
         daily_folder: str = "Daily",
-        symbol: str = "MES",
+        symbols: list[str] | None = None,
+        tradable_symbols: list[str] | None = None,
     ) -> None:
+        if symbols is None:
+            symbols = ["MES"]
+        if tradable_symbols is None:
+            tradable_symbols = list(symbols)
         self.state_db = state_db
         self.ib_client = ib_client
         self.ai_analyst = ai_analyst
@@ -58,7 +63,8 @@ class Orchestrator:
         self.vault_root = Path(vault_root)
         self.fallback_dir = Path(fallback_dir)
         self.daily_folder = daily_folder
-        self.symbol = symbol
+        self.symbols = list(symbols)
+        self.tradable_symbols = list(tradable_symbols)
 
     def run_premarket(self, run_at: datetime) -> PipelineResult:
         """Execute one premarket pipeline run."""
@@ -100,7 +106,8 @@ class Orchestrator:
             generator = PremarketGenerator(
                 ib_client=self.ib_client,
                 ai_analyst=self.ai_analyst,
-                symbol=self.symbol,
+                symbols=self.symbols,
+                tradable_symbols=self.tradable_symbols,
             )
             outcome = generator.generate(
                 context=context,
@@ -126,8 +133,7 @@ class Orchestrator:
                     ),
                 )
 
-            # Write to Obsidian first — the markdown file is the source of truth;
-            # the plan row is a derived index pointing back to it.
+            # Write to Obsidian first to capture the report path for plan rows
             writer = ObsidianWriter(
                 vault_root=self.vault_root,
                 fallback_dir=self.fallback_dir,
@@ -138,12 +144,14 @@ class Orchestrator:
                 content=outcome.report_text,
             )
 
-            # Persist plan if extractable, using the real path now that it exists
-            plan = PlanExtractor().extract(outcome.report_text)
-            if plan is not None:
+            # Persist per-tradable plans
+            plans = PlanExtractor().extract_per_instrument(
+                outcome.report_text, instruments=self.tradable_symbols
+            )
+            for symbol, plan in plans.items():
                 self.state_db.save_plan(
                     date_et=date_et,
-                    instrument=self.symbol,
+                    instrument=symbol,
                     setup_name=plan.setup_name,
                     direction=plan.direction,
                     entry=plan.entry,

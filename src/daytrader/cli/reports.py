@@ -118,7 +118,8 @@ def run_cmd(ctx: click.Context, report_type: str) -> None:
             vault_root=vault_root,
             fallback_dir=fallback_dir,
             daily_folder=cfg.obsidian.daily_folder,
-            symbol="MES",
+            symbols=["MES", "MNQ", "MGC"],
+            tradable_symbols=["MES", "MGC"],
         )
         result = orchestrator.run_premarket(run_at=datetime.now(timezone.utc))
 
