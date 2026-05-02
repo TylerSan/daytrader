@@ -22,3 +22,9 @@ docs/trading/setups/*.yaml
 
 # Secrets — never commit
 config/secrets.yaml
+
+# launchd run logs (rotate manually for now; auto-rotate in future phase)
+data/logs/launchd/*.out
+data/logs/launchd/*.err
+data/logs/launchd/premarket-*.log
+!data/logs/launchd/.gitkeep
