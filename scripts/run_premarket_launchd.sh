@@ -7,6 +7,8 @@
 # exits 0 so launchd doesn't keep retrying. On success runs the actual
 # report and lets the orchestrator handle delivery.
 
+# NOTE: -e is deliberately NOT set. We want preflight failure to be
+# handled (notification + clean exit 0) rather than tripping ERR exit.
 set -uo pipefail
 
 # Resolve project root from the script's location.
@@ -31,24 +33,26 @@ mkdir -p "$LOG_DIR"
 TS="$(date +%Y%m%d-%H%M%S)"
 RUN_LOG="$LOG_DIR/premarket-$TS.log"
 
-{
-    echo "[run_premarket_launchd] start $(date -Iseconds)"
-    echo "[run_premarket_launchd] PATH=$PATH"
-    echo "[run_premarket_launchd] PWD=$PROJECT_ROOT"
+# Tee both stdout and stderr to the run log without using a pipe block —
+# this way `exit "$rc"` propagates the actual exit code to launchd.
+exec > >(tee "$RUN_LOG") 2>&1
 
-    # Preflight check
-    if ! uv run python scripts/preflight_check.py --silent; then
-        echo "[run_premarket_launchd] PREFLIGHT FAILED — send notification and exit"
-        # Best-effort macOS notification
-        osascript -e 'display notification "Preflight check failed at 06:00 PT — TWS / claude / config issue" with title "DayTrader" sound name "Submarine"' 2>/dev/null || true
-        exit 0
-    fi
+echo "[run_premarket_launchd] start $(date -Iseconds)"
+echo "[run_premarket_launchd] PATH=$PATH"
+echo "[run_premarket_launchd] PWD=$PROJECT_ROOT"
 
-    # Run the actual pipeline
-    echo "[run_premarket_launchd] preflight ok, invoking reports run"
-    uv run daytrader reports run --type premarket --no-pdf
-    rc=$?
-    echo "[run_premarket_launchd] reports run exit=$rc"
-    echo "[run_premarket_launchd] end $(date -Iseconds)"
-    exit "$rc"
-} 2>&1 | tee "$RUN_LOG"
+# Preflight check
+if ! uv run python scripts/preflight_check.py --silent; then
+    echo "[run_premarket_launchd] PREFLIGHT FAILED — send notification and exit"
+    # Best-effort macOS notification
+    osascript -e 'display notification "Preflight check failed at 06:00 PT — TWS / claude / config issue" with title "DayTrader" sound name "Submarine"' 2>/dev/null || true
+    exit 0
+fi
+
+# Run the actual pipeline
+echo "[run_premarket_launchd] preflight ok, invoking reports run"
+uv run daytrader reports run --type premarket --no-pdf
+rc=$?
+echo "[run_premarket_launchd] reports run exit=$rc"
+echo "[run_premarket_launchd] end $(date -Iseconds)"
+exit "$rc"
