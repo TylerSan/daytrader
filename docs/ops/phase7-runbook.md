@@ -27,7 +27,8 @@ After Phase 7 v1 install, the premarket report generates **automatically every w
 ## Install
 
 ```bash
-cd "/Users/tylersan/Projects/Day trading/.claude/worktrees/nice-varahamihira-9d6142"
+# From the project root (e.g., ~/Projects/Day trading)
+cd "$(git rev-parse --show-toplevel)"
 ./scripts/install_launchd.sh
 ```
 
@@ -50,7 +51,7 @@ Look for `state = waiting` and the `StartCalendarInterval` entries.
 launchctl kickstart "gui/$(id -u)/com.daytrader.report.premarket.0600pt"
 # Wait ~2.5 minutes
 ls -la "$HOME/Documents/DayTrader Vault/Daily/" | grep premarket
-tail -50 data/logs/launchd/premarket-*.log | tail -50
+tail -50 data/logs/launchd/premarket-*.log
 ```
 
 If everything wired correctly: a fresh `YYYY-MM-DD-premarket.md` appears in Obsidian.
@@ -59,7 +60,7 @@ If everything wired correctly: a fresh `YYYY-MM-DD-premarket.md` appears in Obsi
 
 `scripts/preflight_check.py` detects the unreachable port → wrapper exits 0 (no retry storm) → macOS sends a notification ("Preflight check failed at 06:00 PT — TWS / claude / config issue") → user gets the alert and starts TWS manually.
 
-⚠️ **The notification only shows if Mac is awake AND not in Do Not Disturb mode.** For a phone alert (more reliable), wire Telegram bot per `docs/ops/phase2-runbook.md` step "Telegram bot setup".
+⚠️ **The notification only shows if Mac is awake AND not in Do Not Disturb mode.** For a phone alert (more reliable), wire Telegram bot per `docs/ops/phase2-runbook.md` Prerequisites step 5 (Telegram bot setup).
 
 ## Troubleshooting
 
@@ -69,7 +70,7 @@ If everything wired correctly: a fresh `YYYY-MM-DD-premarket.md` appears in Obsi
 | Log shows "TWS unreachable" | TWS not running at 06:00 PT | Open TWS by 05:55; or auto-launch TWS via Login Items |
 | Log shows "claude CLI not found" | launchd PATH doesn't include /opt/homebrew/bin | Already handled in plist `EnvironmentVariables.PATH`; verify by `launchctl print` |
 | Log shows AI timeout | claude -p > 180s | Increase `AIAnalyst.timeout_seconds` in code; or accept retry |
-| Log shows "Telegram disabled: Secrets file not found" | bot not configured | OK — only Obsidian write happens; configure bot per phase2-runbook if you want phone push |
+| Log shows "Telegram disabled: Secrets file not found" | bot not configured | OK — only Obsidian write happens; see Telegram bot setup steps in `docs/ops/phase2-runbook.md` Prerequisites step 5 |
 | Job fires but NO log file at all | Wrapper didn't even start; permission issue on shell script | `ls -la scripts/run_premarket_launchd.sh` — must be executable; re-`chmod +x` if not |
 
 ## Uninstall
