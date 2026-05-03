@@ -1,11 +1,19 @@
-# Phase 7 v1: launchd Auto-Trigger Runbook
+# Phase 7: launchd Auto-Trigger Runbook (premarket + weekly)
 
-After Phase 7 v1 install, the premarket report generates **automatically every weekday at 06:00 PT** (Mon-Fri). User wakes up to a fresh report in Obsidian + Telegram (if bot configured), no manual command needed.
+After install, two reports generate automatically without user intervention:
+
+| Job | Schedule | Command | Output |
+|---|---|---|---|
+| **premarket** | **Mon-Fri 06:00 PT** | `daytrader reports run --type premarket --no-pdf` (new system, multi-instrument) | `~/Documents/DayTrader Vault/Daily/YYYY-MM-DD-premarket.md` |
+| **weekly** | **Sunday 14:00 PT** | `daytrader weekly run --ai` (old system; new `reports --type weekly` is a Phase 5 stub) | `~/Documents/DayTrader Vault/Weekly/weekly-YYYY-MM-DD.md` |
+
+User wakes up to a fresh report in Obsidian + Telegram (if bot configured), no manual command needed.
 
 ## Scope
 
-✅ Premarket 06:00 PT only (Mon-Fri)
-❌ Other report types (intraday/EOD/night/weekly) — Phase 7.5 after Phase 5 lands those
+✅ Premarket 06:00 PT (Mon-Fri) — new multi-instrument pipeline
+✅ Weekly 14:00 PT (Sun) — old `daytrader weekly` pipeline (Phase 5 will route this to new system; only the wrapper's invoked command will change, plist + schedule stay the same)
+❌ Other report types (intraday/EOD/night/asia) — Phase 7.5 after Phase 5 lands those
 ❌ IB Gateway 24/7 — TWS still needs to be running (manually or via separate automation)
 
 ## Prerequisites
@@ -29,32 +37,45 @@ After Phase 7 v1 install, the premarket report generates **automatically every w
 ```bash
 # From the project root (e.g., ~/Projects/Day trading)
 cd "$(git rev-parse --show-toplevel)"
+
+# Premarket job (Mon-Fri 06:00 PT)
 ./scripts/install_launchd.sh
+
+# Weekly job (Sun 14:00 PT)
+./scripts/install_weekly_launchd.sh
 ```
 
-Output should end with "Next firing: next weekday at 06:00 PT".
+Each install ends with "Next firing: ..." line. Run them independently — neither depends on the other.
 
 ## Verify
 
 ```bash
-# Job is loaded
+# Premarket job is loaded
 launchctl print "gui/$(id -u)/com.daytrader.report.premarket.0600pt" | head -30
+
+# Weekly job is loaded
+launchctl print "gui/$(id -u)/com.daytrader.report.weekly.sun1400pt" | head -30
 ```
 
-Look for `state = waiting` and the `StartCalendarInterval` entries.
+Look for `state = not running` (= idle/armed) and the calendar interval descriptor (Hour/Minute/Weekday).
 
-## Test fire NOW (without waiting for 06:00 PT)
+## Test fire NOW (without waiting for the schedule)
 
-⚠️ This invokes the real pipeline (TWS + claude + Obsidian + optional Telegram). Make sure TWS is running.
+⚠️ Both invocations exercise the real pipeline (TWS + claude + Obsidian). Make sure TWS is running before testing premarket; weekly only needs claude + config.
 
 ```bash
+# Premarket (~2.5 min, writes to Daily/)
 launchctl kickstart "gui/$(id -u)/com.daytrader.report.premarket.0600pt"
-# Wait ~2.5 minutes
 ls -la "$HOME/Documents/DayTrader Vault/Daily/" | grep premarket
 tail -50 data/logs/launchd/premarket-*.log
+
+# Weekly (~2.5 min, writes to Weekly/)
+launchctl kickstart "gui/$(id -u)/com.daytrader.report.weekly.sun1400pt"
+ls -la "$HOME/Documents/DayTrader Vault/Weekly/" | grep weekly
+tail -80 data/logs/launchd/weekly-*.log
 ```
 
-If everything wired correctly: a fresh `YYYY-MM-DD-premarket.md` appears in Obsidian.
+If everything wired correctly: fresh markdown files appear in Obsidian.
 
 ## What happens if TWS isn't running at 06:00 PT?
 
@@ -76,19 +97,43 @@ If everything wired correctly: a fresh `YYYY-MM-DD-premarket.md` appears in Obsi
 ## Uninstall
 
 ```bash
-./scripts/uninstall_launchd.sh
+./scripts/uninstall_launchd.sh           # premarket
+./scripts/uninstall_weekly_launchd.sh    # weekly
 ```
 
 Removes plist and unloads job. Pipeline files (markdown, charts, etc.) are NOT deleted.
 
 ## Logs
 
-Each run writes to `data/logs/launchd/premarket-YYYY-MM-DD-HHMMSS.log` (the wrapper's tee output). launchd's own stdout/stderr also go to `data/logs/launchd/premarket.0600pt.{out,err}`.
+Each run writes a timestamped wrapper log:
+- Premarket: `data/logs/launchd/premarket-YYYYMMDD-HHMMSS.log`
+- Weekly: `data/logs/launchd/weekly-YYYYMMDD-HHMMSS.log`
 
-Both are gitignored. Manual rotation for now — `ls data/logs/launchd | wc -l` shouldn't grow past ~30 unless you run many test fires.
+launchd's own stdout/stderr also go to `data/logs/launchd/premarket.0600pt.{out,err}` and `data/logs/launchd/weekly.sun1400pt.{out,err}`.
 
-## What about the other 6 report time slots?
+All gitignored. Manual rotation for now — `ls data/logs/launchd | wc -l` shouldn't grow past ~50 unless you run many test fires. Quarterly truncate launchd's own .out/.err if they grow:
 
-Spec §6.2.1 lists 7 plists total. Phase 7 v1 only installs the premarket one because Phase 5 (other report types) hasn't been built. When Phase 5 lands:
+```bash
+: > data/logs/launchd/premarket.0600pt.out
+: > data/logs/launchd/premarket.0600pt.err
+: > data/logs/launchd/weekly.sun1400pt.out
+: > data/logs/launchd/weekly.sun1400pt.err
+```
+
+## Troubleshooting (additions for weekly)
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Weekly fires Sunday but writes to wrong vault folder | `weekly_folder` config drift | Check `config/user.yaml` `obsidian.weekly_folder` (default: `Weekly`) |
+| Weekly log shows "Phase 2 implements premarket only" | The wrapper accidentally calls `daytrader reports run --type weekly` instead of `daytrader weekly run --ai` | Inspect `scripts/run_weekly_launchd.sh` line ~57; should be `uv run daytrader weekly run --ai` until Phase 5 lands |
+| Weekly fires twice on the same Sunday | Both `Weekday=0` and `Weekday=7` defined (both = Sunday); only have ONE of them in the plist | `plutil -p` the plist to confirm only one Weekday entry |
+
+## What about the other 5 report time slots?
+
+Spec §6.2.1 lists 7 cadences total. Phase 7 currently installs 2 (premarket + weekly). The remaining 5 (intraday-4h-1, intraday-4h-2, eod, night, asia) wait for Phase 5 to build out their content generation. When Phase 5 lands:
 - Same plist template pattern, just different time slots
-- Phase 7.5 plan will write/install all 7
+- Phase 7.5 plan will write/install all remaining plists
+
+## Migration note (Phase 5)
+
+When Phase 5 implements `daytrader reports run --type weekly` properly, swap the wrapper's invocation from `uv run daytrader weekly run --ai` to `uv run daytrader reports run --type weekly --no-pdf`. Plist + schedule + install scripts stay unchanged.

@@ -27,4 +27,5 @@ config/secrets.yaml
 data/logs/launchd/*.out
 data/logs/launchd/*.err
 data/logs/launchd/premarket-*.log
+data/logs/launchd/weekly-*.log
 !data/logs/launchd/.gitkeep
