@@ -69,7 +69,15 @@ def test_collector_nonzero_exit_returns_unavailable():
     assert "exit" in res.unavailable_reason.lower() or "2" in res.unavailable_reason
 
 
-def test_collector_garbage_response_returns_unavailable():
+def test_collector_garbage_response_returns_unavailable(tmp_path, monkeypatch):
+    """Garbage AI response → parser raises → collector returns unavailable.
+
+    Uses tmp_path + monkeypatch.chdir so the failure-log writes land in the
+    test's tmp dir rather than polluting the project's
+    `data/logs/sentiment-failures/` (which is what `_log_raw_response`'s
+    relative-path default would otherwise hit).
+    """
+    monkeypatch.chdir(tmp_path)
     with patch("subprocess.run", return_value=_completed("hello world")):
         collector = SentimentCollector(symbols=["MES"])
         res = collector.collect()
