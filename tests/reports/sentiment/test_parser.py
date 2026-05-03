@@ -114,3 +114,27 @@ def test_parse_negative_macro_score():
     assert res.macro is not None
     assert res.macro.score.combined == -3
     assert res.macro.score.news == -4
+
+
+def test_parse_macro_with_full_width_punctuation():
+    """Real claude output may use full-width Chinese comma + ascii or full-width parens."""
+    fw = SAMPLE_HAPPY.replace(
+        "**总体 偏多 +3 / 10**（news +4, social +2）",
+        "**总体 偏多 +3 / 10**（news +4，social +2）",  # full-width comma
+    )
+    res = parse_sentiment_response(fw, expected_symbols=["MES", "MGC", "MNQ"])
+    assert res.macro is not None
+    assert res.macro.score.combined == 3
+    assert res.macro.score.news == 4
+    assert res.macro.score.social == 2
+
+
+def test_parse_macro_with_half_width_parens():
+    """Test claude using half-width parens instead of Chinese full-width."""
+    hw = SAMPLE_HAPPY.replace(
+        "**总体 偏多 +3 / 10**（news +4, social +2）",
+        "**总体 偏多 +3 / 10**(news +4, social +2)",  # half-width parens
+    )
+    res = parse_sentiment_response(hw, expected_symbols=["MES", "MGC", "MNQ"])
+    assert res.macro is not None
+    assert res.macro.score.combined == 3

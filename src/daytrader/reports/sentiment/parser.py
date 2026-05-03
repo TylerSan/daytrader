@@ -19,9 +19,6 @@ class ParseError(ValueError):
 
 # --- Helpers ----------------------------------------------------------------
 
-_INT_RE = re.compile(r"[-+]?\d+")
-
-
 def _clamp(n: int, low: int = -5, high: int = 5) -> int:
     return max(low, min(high, n))
 
@@ -99,7 +96,7 @@ def _parse_macro(macro_block: str) -> MacroSentiment:
     """
     # Combined score line
     m = re.search(
-        r"\*\*总体\s+\S+\s+([-+]?\d+)\s*/\s*10\*\*\s*（\s*news\s+([-+]?\d+)\s*,\s*social\s+([-+]?\d+)\s*）",
+        r"\*\*总体\s+\S+\s+([-+]?\d+)\s*/\s*10\*\*\s*[（(]\s*news\s+([-+]?\d+)\s*[,，、]\s*social\s+([-+]?\d+)\s*[）)]",
         macro_block,
     )
     if not m:
