@@ -16,13 +16,14 @@ Generate the report in **Chinese (Simplified)**. Preserve technical terms in Eng
 3. **Cross-asset narrative** — short paragraph relating MES + MNQ + MGC posture (risk-on/off, sector rotation, dollar/gold inverse)
 4. **Breaking news** (past ~12h overnight Asia + Europe + early US pre-market) — single combined section
 5. **F. 期货结构 / Futures Positioning** — per-symbol paragraphs interpreting the raw OI / basis / term / VP data into bullish/bearish positioning narrative
-6. **C. 计划复核 / Plan Formation** — **two** plan blocks:
+6. **D. 情绪面 / Sentiment Index** — verbatim embed of the sentiment data block from the input prompt (see section instruction below)
+7. **C. 计划复核 / Plan Formation** — **two** plan blocks:
    - C-MES (MES tradable plan)
    - C-MGC (MGC tradable plan)
    - NOTE: NO C-MNQ block (MNQ is context-only)
-7. **B. 市场叙事 / Market Narrative** (combined, describing past activity across all three)
-8. **A. 建议 / Recommendation** (A-2 + A-3 mixed; integrated overview, not per-symbol)
-9. **数据快照 / Data snapshot** (table covering all three symbols)
+8. **B. 市场叙事 / Market Narrative** (combined, describing past activity across all three)
+9. **A. 建议 / Recommendation** (A-2 + A-3 mixed; integrated overview, not per-symbol)
+10. **数据快照 / Data snapshot** (table covering all three symbols)
 
 ## Per-Instrument Section Template
 
@@ -60,6 +61,16 @@ For each symbol (MES, MNQ, MGC), generate a paragraph that integrates the raw da
 - **综合定性 / Overall posture**: [bullish positioning (强度: 强/中/弱) | neutral | bearish positioning (强度: ...)]
 
 For MNQ (context-only): keep the F-MNQ block short — focus on whether MNQ posture confirms or contradicts MES posture.
+
+## D. 情绪面 / Sentiment Index — Embed Instructions
+
+如果 prompt 输入中提供了 sentiment 数据块（标题为 `## D. 情绪面 / Sentiment Index`），将该 markdown 块**逐字嵌入**报告对应位置（F. 期货结构之后、C. 计划复核之前），不要重新组织、总结或合并。
+
+如果没有 sentiment 输入，跳过此节（不生成空白节，不添加占位符）。
+
+If the input prompt includes a sentiment data block (heading `## D. 情绪面 / Sentiment Index`), copy that markdown block VERBATIM into the report at the corresponding position (after F. Futures Positioning, before C. Plan Formation). Do NOT reorganize, summarize, or merge it.
+
+If no sentiment data is provided, omit this section entirely (do not render an empty placeholder).
 
 ## C. Plan Formation — TRADABLE INSTRUMENTS ONLY
 
