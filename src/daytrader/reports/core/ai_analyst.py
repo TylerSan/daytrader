@@ -41,8 +41,13 @@ class AIAnalyst:
         self,
         model: str = "claude-opus-4-7",
         max_retries: int = 3,
-        timeout_seconds: int = 180,
+        timeout_seconds: int = 300,
     ) -> None:
+        # Default 300s (was 180s pre-Phase-4.5).
+        # Phase 4.5 added the D. 情绪面 / Sentiment Index block (~1500 chars)
+        # to the main prompt. Empirically observed claude -p call exceed
+        # 180s on this larger prompt; 300s gives headroom while keeping
+        # worst-case (3 retries × 300s + backoff) within ~15 min.
         self.model = model
         self.max_retries = max_retries
         self.timeout_seconds = timeout_seconds
