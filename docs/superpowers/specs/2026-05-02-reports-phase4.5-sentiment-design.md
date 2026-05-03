@@ -1,7 +1,7 @@
 # Phase 4.5: Sentiment Section — News + Social Media Bull/Bear Index
 
 **Date:** 2026-05-02
-**Status:** Approved (brainstorm complete, awaiting plan)
+**Status:** Implemented (HEAD commit 07ad9ee018d1ea70d2d8acaa3a8e45d3610531d2)
 **Owner:** Tyler San
 **Parent spec:** [`2026-04-25-reports-system-design.md`](./2026-04-25-reports-system-design.md)
 **Predecessor:** Phase 4 (Futures Structure) [`2026-04-26-reports-phase4-futures-structure.md`](../plans/2026-04-26-reports-phase4-futures-structure.md)
