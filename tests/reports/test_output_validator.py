@@ -62,6 +62,9 @@ data
 - Settlement: ok
 - Overall: neutral
 
+## D. 情绪面 / Sentiment Index
+macro: neutral
+
 ## C. 计划复核
 ### C-MES
 plan
@@ -153,6 +156,9 @@ data
 ### F-MGC
 data
 
+## D. 情绪面 / Sentiment Index
+macro: neutral
+
 ## C. 计划复核 / Plan Formation
 ### C-MES
 plan
@@ -205,3 +211,62 @@ def test_validator_premarket_fails_when_c_mes_missing():
     validator = OutputValidator()
     result = validator.validate(no_c_mes, report_type="premarket")
     assert result.ok is False
+
+
+def test_premarket_validator_requires_sentiment_section():
+    """A premarket report without 'D. 情绪面' / 'Sentiment Index' should fail validation."""
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    # Build a minimal report missing the sentiment section
+    content = """# 📋 Premarket Daily Report
+## Lock-in Metadata
+## 📊 MES
+## 📊 MNQ
+## 📊 MGC
+### W
+### D
+### 4H
+### 1H
+News
+F. 期货结构
+### C-MES
+### C-MGC
+C.
+B.
+A.
+数据快照
+"""
+    result = v.validate(content, "premarket")
+    assert not result.ok
+    assert any("情绪" in m or "Sentiment" in m for m in result.missing)
+
+
+def test_premarket_validator_accepts_sentiment_alternatives():
+    """Either '情绪面' or 'Sentiment Index' or 'D. 情绪面' should satisfy the slot."""
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    base = """# 📋 Premarket Daily Report
+## Lock-in Metadata
+## 📊 MES
+## 📊 MNQ
+## 📊 MGC
+### W
+### D
+### 4H
+### 1H
+News
+F. 期货结构
+### C-MES
+### C-MGC
+C.
+B.
+A.
+数据快照
+"""
+    for marker in ["## D. 情绪面", "Sentiment Index", "## 情绪面"]:
+        full = base + f"\n{marker}\n"
+        result = v.validate(full, "premarket")
+        # All other required sections present, only sentiment varies → must pass on the sentiment slot
+        # (it might still fail on other slots — we only assert no sentiment missing)
+        assert all("情绪" not in m and "Sentiment" not in m for m in result.missing), \
+            f"marker {marker!r} should satisfy sentiment slot but didn't: {result.missing}"

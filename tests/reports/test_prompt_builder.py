@@ -266,3 +266,59 @@ def test_prompt_builder_omits_f_section_when_no_futures_data():
     )
     user_text = msgs[1]["content"]
     assert "no F-section data available" in user_text
+
+
+def _basic_ctx() -> ReportContext:
+    """Minimal ReportContext for prompt-builder tests that don't care about
+    contract/lock-in state."""
+    return ReportContext(
+        contract_status=ContractStatus.NOT_CREATED,
+        contract_text=None,
+        lock_in_trades_done=0,
+        lock_in_target=30,
+        cumulative_r=None,
+        last_trade_date=None,
+        last_trade_r=None,
+        streak=None,
+    )
+
+
+def test_build_premarket_includes_sentiment_block_when_provided():
+    """PromptBuilder.build_premarket should embed sentiment_md verbatim
+    when supplied."""
+    pb = PromptBuilder()
+    sentiment_md = (
+        "## D. 情绪面 / Sentiment Index\n\n"
+        "### 🌐 Macro Sentiment\n"
+        "**总体综合 +3 / 10**（news +4, social +2）\n"
+        "..."
+    )
+    msgs = pb.build_premarket(
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=_empty_bars_by_symbol(),
+        tradable_symbols=["MES"],
+        news_items=[],
+        run_timestamp_pt="06:00 PT",
+        run_timestamp_et="09:00 ET",
+        futures_data=None,
+        sentiment_md=sentiment_md,
+    )
+    user_text = msgs[1]["content"]
+    assert "## D. 情绪面" in user_text or "Sentiment Index" in user_text
+
+
+def test_build_premarket_without_sentiment_md_works():
+    """sentiment_md is optional — omitting it must not crash, just no D. section."""
+    pb = PromptBuilder()
+    msgs = pb.build_premarket(
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=_empty_bars_by_symbol(),
+        tradable_symbols=["MES"],
+        news_items=[],
+        run_timestamp_pt="06:00 PT",
+        run_timestamp_et="09:00 ET",
+        futures_data=None,
+    )
+    user_text = msgs[1]["content"]
+    # Sentiment block absent
+    assert "## D. 情绪面" not in user_text

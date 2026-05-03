@@ -15,6 +15,25 @@ from daytrader.reports.core.orchestrator import (
     Orchestrator,
     PipelineResult,
 )
+from daytrader.reports.sentiment.dataclasses import SentimentResult
+
+
+@pytest.fixture(autouse=True)
+def _mock_sentiment_section():
+    """Stub out SentimentSection in the orchestrator so unit tests never spawn
+    real `claude -p` subprocesses. Phase 4.5 wiring."""
+    with patch(
+        "daytrader.reports.core.orchestrator.SentimentSection"
+    ) as mock_section_cls:
+        mock_section = mock_section_cls.return_value
+        mock_section.collect.return_value = SentimentResult.unavailable_due_to(
+            "test mock — sentiment disabled"
+        )
+        mock_section.render.return_value = (
+            "## D. 情绪面 / Sentiment Index\n\n"
+            "⚠️ test mock — sentiment disabled\n"
+        )
+        yield mock_section_cls
 
 
 VALID_REPORT = (
@@ -25,6 +44,7 @@ VALID_REPORT = (
     "### 📊 MGC\n#### W\nx\n#### D\nx\n#### 4H\nx\n#### 1H\nx\n\n"
     "## 突发新闻\nnone\n\n"
     "## F. 期货结构\n### F-MES\nok\n### F-MGC\nok\n\n"
+    "## D. 情绪面 / Sentiment Index\n⚠️ unavailable\n\n"
     "## C. 计划复核\n\n"
     "### C-MES\n\n**Today's plan**:\n"
     "- Setup: ORB long\n- Direction: long\n- Entry: 5240.00\n"

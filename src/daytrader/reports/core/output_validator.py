@@ -35,6 +35,8 @@ REQUIRED_SECTIONS: dict[str, list[SectionSpec]] = {
         ["新闻", "News", "Breaking"],
         # F. 期货结构 — accept multiple variants
         ["F. 期货结构", "F-MES", "F-MNQ", "F-MGC", "Futures Positioning", "期货结构"],
+        # D. 情绪面 — accept multiple variants (Phase 4.5)
+        ["情绪面", "D. 情绪面", "Sentiment Index", "Sentiment"],
         # Plan blocks for tradable instruments
         ["C-MES", "### C-MES", "C. MES", "MES Plan"],
         ["C-MGC", "### C-MGC", "C. MGC", "MGC Plan"],

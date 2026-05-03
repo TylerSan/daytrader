@@ -19,6 +19,7 @@ from daytrader.reports.core.ai_analyst import AIAnalyst
 from daytrader.reports.core.context_loader import ContextLoader
 from daytrader.reports.core.plan_extractor import PlanExtractor
 from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
+from daytrader.reports.sentiment import SentimentSection
 from daytrader.reports.types.premarket import PremarketGenerator
 
 
@@ -108,6 +109,21 @@ class Orchestrator:
             )
             context = loader.load()
 
+            # Sentiment section (Phase 4.5) — best-effort web/social fetch via
+            # claude -p. Failures are translated to an "unavailable" markdown
+            # block by SentimentSection itself; never raises here.
+            sentiment_section = SentimentSection(symbols=self.symbols)
+            try:
+                sentiment_result = sentiment_section.collect()
+                sentiment_md = sentiment_section.render(sentiment_result)
+            except Exception as exc:
+                import sys
+                print(
+                    f"[orchestrator] sentiment collect/render failed: {exc}",
+                    file=sys.stderr,
+                )
+                sentiment_md = ""
+
             # Generate (includes IB fetch + AI call)
             generator = PremarketGenerator(
                 ib_client=self.ib_client,
@@ -119,6 +135,7 @@ class Orchestrator:
                 context=context,
                 run_timestamp_pt=f"{time_pt_str} PT",
                 run_timestamp_et=f"{time_et_str} ET",
+                sentiment_md=sentiment_md,
             )
 
             if not outcome.validation.ok:

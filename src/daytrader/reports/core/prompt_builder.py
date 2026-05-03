@@ -29,6 +29,7 @@ class PromptBuilder:
         run_timestamp_pt: str,
         run_timestamp_et: str,
         futures_data: "FuturesSection | None" = None,
+        sentiment_md: str = "",
     ) -> list[dict[str, Any]]:
         template = load_template("premarket")
         contract_section = (
@@ -60,13 +61,22 @@ class PromptBuilder:
             f"All other symbols are context-only — generate analysis but NO plan."
         )
 
+        # Compose: futures + (optional) sentiment, joined by blank line.
+        # When `sentiment_md` is empty (default) the prompt is unchanged from
+        # the pre-Phase-4.5 shape — backward compatible.
+        sentiment_block = sentiment_md.strip() if sentiment_md else ""
+        composed_blocks = [futures_block]
+        if sentiment_block:
+            composed_blocks.append(sentiment_block)
+        composed_md = "\n\n".join(composed_blocks)
+
         user_text = (
             f"# Premarket Daily Report — generation context\n\n"
             f"**Run time**: {run_timestamp_pt} ({run_timestamp_et})\n\n"
             f"{lock_in_block}\n\n"
             f"{tradable_block}\n\n"
             f"{bars_block}\n\n"
-            f"{futures_block}\n\n"
+            f"{composed_md}\n\n"
             f"{news_block}\n\n"
             f"Please generate the full multi-instrument premarket report following "
             f"the system prompt template. Output in Chinese."

@@ -51,6 +51,7 @@ def test_premarket_generator_fetches_bars_for_each_symbol():
         "### 📊 MGC\n#### W\nx\n#### D\nx\n#### 4H\nx\n#### 1H\nx\n\n"
         "## 突发新闻\nnone\n\n"
         "## F. 期货结构\n### F-MES\nok\n### F-MGC\nok\n\n"
+        "## D. 情绪面 / Sentiment Index\n⚠️ unavailable\n\n"
         "## C. 计划复核\n### C-MES\nplan\n### C-MGC\nplan\n\n"
         "## B. 市场叙事\nnarr\n\n"
         "## A. 建议\nno action\n\n"

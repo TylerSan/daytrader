@@ -77,6 +77,7 @@ class PremarketGenerator:
         run_timestamp_pt: str,
         run_timestamp_et: str,
         news_items: list[dict[str, Any]] | None = None,
+        sentiment_md: str = "",
     ) -> GenerationOutcome:
         bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]] = {}
         for symbol in self.symbols:
@@ -137,6 +138,7 @@ class PremarketGenerator:
             run_timestamp_pt=run_timestamp_pt,
             run_timestamp_et=run_timestamp_et,
             futures_data=futures_data,
+            sentiment_md=sentiment_md,
         )
 
         ai_result = self.ai_analyst.call(
