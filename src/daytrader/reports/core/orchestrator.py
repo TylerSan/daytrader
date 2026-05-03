@@ -125,11 +125,19 @@ class Orchestrator:
                 sentiment_md = ""
 
             # Generate (includes IB fetch + AI call)
+            # Phase 4 hooks (basis + term structure) — wire IB-backed fetchers.
+            from daytrader.reports.futures_data.term_prices import TermPricesFetcher
+            from daytrader.reports.futures_data.underlying_prices import (
+                UnderlyingPriceFetcher,
+            )
+
             generator = PremarketGenerator(
                 ib_client=self.ib_client,
                 ai_analyst=self.ai_analyst,
                 symbols=self.symbols,
                 tradable_symbols=self.tradable_symbols,
+                underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
+                term_price_fetcher=TermPricesFetcher(self.ib_client),
             )
             outcome = generator.generate(
                 context=context,

@@ -274,3 +274,177 @@ def test_ibclient_get_open_interest_returns_recent_oi(monkeypatch):
     assert oi.yesterday == pytest.approx(2131390.0)
     assert oi.delta == pytest.approx(12430.0)
     assert oi.delta_pct == pytest.approx(12430.0 / 2131390.0)
+
+
+# ---------------------------------------------------------------------------
+# get_daily_close — generic helper for any contract (Stock/Index/Future)
+# ---------------------------------------------------------------------------
+
+
+def test_get_daily_close_returns_last_bar_close(monkeypatch):
+    """get_daily_close returns the close of the most recent daily bar."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+    bar1 = MagicMock(close=720.0)
+    bar2 = MagicMock(close=720.5)
+    fake_ib.reqHistoricalData.return_value = [bar1, bar2]
+    fake_ib.qualifyContracts.side_effect = lambda c: [c]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+
+    fake_contract = MagicMock(conId=12345)  # already-qualified contract
+    close = client.get_daily_close(fake_contract)
+    assert close == pytest.approx(720.5)
+
+
+def test_get_daily_close_qualifies_unqualified_contract(monkeypatch):
+    """If contract has no conId, get_daily_close calls qualifyContracts."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+    fake_ib.reqHistoricalData.return_value = [MagicMock(close=100.0)]
+    qualified_contract = MagicMock(conId=99999)
+    fake_ib.qualifyContracts.return_value = [qualified_contract]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+
+    unqualified = MagicMock(conId=0)  # no conId
+    close = client.get_daily_close(unqualified)
+    assert close == 100.0
+    fake_ib.qualifyContracts.assert_called_once_with(unqualified)
+
+
+def test_get_daily_close_raises_when_not_connected():
+    """get_daily_close raises RuntimeError if disconnected."""
+    client = IBClient()
+    fake_contract = MagicMock(conId=1)
+    with pytest.raises(RuntimeError, match=r"not connected"):
+        client.get_daily_close(fake_contract)
+
+
+def test_get_daily_close_raises_when_no_bars(monkeypatch):
+    """get_daily_close raises RuntimeError if IB returns empty bars list."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+    fake_ib.reqHistoricalData.return_value = []  # empty
+    fake_ib.qualifyContracts.side_effect = lambda c: [c]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+
+    fake_contract = MagicMock(conId=1)
+    with pytest.raises(RuntimeError, match=r"No daily bars"):
+        client.get_daily_close(fake_contract)
+
+
+# ---------------------------------------------------------------------------
+# get_contract_chain — list available Future months for a symbol
+# ---------------------------------------------------------------------------
+
+
+def test_get_contract_chain_returns_sorted_by_expiry(monkeypatch):
+    """get_contract_chain returns ContractDetails list sorted by expiry ascending."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    def _mk_detail(expiry):
+        d = MagicMock()
+        d.contract.lastTradeDateOrContractMonth = expiry
+        return d
+
+    # Return out-of-order; fetcher should sort
+    fake_ib.reqContractDetails.return_value = [
+        _mk_detail("20261218"),
+        _mk_detail("20260618"),
+        _mk_detail("20260918"),
+    ]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+
+    chain = client.get_contract_chain(symbol="MES")
+    expiries = [d.contract.lastTradeDateOrContractMonth for d in chain]
+    assert expiries == ["20260618", "20260918", "20261218"]
+
+
+def test_get_contract_chain_raises_when_not_connected():
+    """get_contract_chain raises RuntimeError if disconnected."""
+    client = IBClient()
+    with pytest.raises(RuntimeError, match=r"not connected"):
+        client.get_contract_chain(symbol="MES")
+
+
+def test_get_contract_chain_unknown_symbol_raises(monkeypatch):
+    """Unknown symbol → ValueError from _exchange_for, propagated up."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    with pytest.raises(ValueError, match=r"Unknown symbol"):
+        client.get_contract_chain(symbol="BOGUS")
+
+
+# ---------------------------------------------------------------------------
+# get_active_front_expiry — ContFuture-driven liquidity-active expiry
+# ---------------------------------------------------------------------------
+
+
+def test_get_active_front_expiry_returns_qualified_expiry(monkeypatch):
+    """get_active_front_expiry returns the qualified ContFuture's expiry string."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+    qualified = MagicMock()
+    qualified.lastTradeDateOrContractMonth = "20260626"
+    fake_ib.qualifyContracts.return_value = [qualified]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    expiry = client.get_active_front_expiry(symbol="MGC")
+    assert expiry == "20260626"
+
+
+def test_get_active_front_expiry_raises_when_not_connected():
+    client = IBClient()
+    with pytest.raises(RuntimeError, match=r"not connected"):
+        client.get_active_front_expiry(symbol="MES")
+
+
+def test_get_active_front_expiry_raises_when_unqualified(monkeypatch):
+    """If qualifyContracts returns empty / no expiry, raise RuntimeError."""
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+    fake_ib.qualifyContracts.return_value = []
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    with pytest.raises(RuntimeError, match=r"Could not resolve"):
+        client.get_active_front_expiry(symbol="MES")

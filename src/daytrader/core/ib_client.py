@@ -234,6 +234,85 @@ class IBClient:
             last=float(ticker.last) if ticker.last else 0.0,
         )
 
+    def get_daily_close(self, contract) -> float:
+        """Fetch the latest daily close price for any qualified contract.
+
+        Generic helper — accepts Stock, Index, Future, or ContFuture (anything
+        ib_insync can qualifyContracts on). Used by:
+          - UnderlyingPriceFetcher (basis): SPX, NDX, GLD daily closes
+          - TermPricesFetcher: front / next / far month futures closes
+
+        Stock + Index closes are available without realtime market-data
+        subscription (delayed/EOD data is included in the basic IB account).
+        """
+        if self._ib is None or not self._ib.isConnected():
+            raise RuntimeError("IBClient is not connected; call connect() first")
+
+        # Qualify if not already qualified — ib_insync requires conId for routing.
+        try:
+            if not getattr(contract, "conId", 0):
+                qualified = self._ib.qualifyContracts(contract)
+                if qualified and getattr(qualified[0], "conId", 0):
+                    contract = qualified[0]
+        except Exception:
+            pass  # mock-friendly: fall through with original contract
+
+        bars = self._ib.reqHistoricalData(
+            contract,
+            endDateTime="",
+            durationStr="2 D",
+            barSizeSetting="1 day",
+            whatToShow="TRADES",
+            useRTH=False,
+            formatDate=2,
+            timeout=15,
+        )
+        if not bars:
+            raise RuntimeError(f"No daily bars returned for {contract}")
+        return float(bars[-1].close)
+
+    def get_active_front_expiry(self, symbol: str) -> str:
+        """Return the liquidity-active front-month expiry (YYYYMMDD) for `symbol`.
+
+        Uses ib_insync's ContFuture qualifier, which mirrors IB's rolling logic:
+        for monthlies (e.g. MGC) this returns the active month even when an
+        earlier-expiring but less-liquid month exists in the chain.
+
+        Used by TermPricesFetcher to anchor the chain to the active month —
+        chronologically-earliest is the wrong choice when a near-expiry low-
+        volume month sits ahead of the active rolling front.
+        """
+        if self._ib is None or not self._ib.isConnected():
+            raise RuntimeError("IBClient is not connected; call connect() first")
+
+        from ib_insync import ContFuture
+        cf = ContFuture(symbol, _exchange_for(symbol))
+        qualified = self._ib.qualifyContracts(cf)
+        if not qualified or not getattr(qualified[0], "lastTradeDateOrContractMonth", ""):
+            raise RuntimeError(f"Could not resolve active front expiry for {symbol}")
+        return qualified[0].lastTradeDateOrContractMonth
+
+    def get_contract_chain(self, symbol: str) -> list:
+        """Return available Future contracts for `symbol`, sorted by expiry ascending.
+
+        Each element is an ib_insync ContractDetails — use `.contract` to get
+        the Future object (with conId / lastTradeDateOrContractMonth populated).
+
+        Used by TermPricesFetcher to slice front / next / far months for the
+        term structure F-section.
+        """
+        if self._ib is None or not self._ib.isConnected():
+            raise RuntimeError("IBClient is not connected; call connect() first")
+
+        from ib_insync import Future
+        details = self._ib.reqContractDetails(
+            Future(symbol=symbol, exchange=_exchange_for(symbol), currency="USD")
+        )
+        return sorted(
+            details,
+            key=lambda d: d.contract.lastTradeDateOrContractMonth,
+        )
+
     def get_open_interest(self, symbol: str) -> OpenInterest:
         """Fetch most recent OPEN_INTEREST values (today + yesterday).
 
