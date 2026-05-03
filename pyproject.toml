@@ -49,6 +49,9 @@ packages = ["src/daytrader"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+markers = [
+    "slow: tests that hit the network or take >30s — skipped by default",
+]
 
 [dependency-groups]
 dev = [
