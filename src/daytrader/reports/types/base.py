@@ -236,6 +236,10 @@ class BaseCadenceGenerator(ABC):
         try:
             plans = self._maybe_read_plan(date_et)
         except Exception as exc:
+            print(
+                f"[base_cadence] WARNING: plan_read failed: {exc}",
+                file=sys.stderr,
+            )
             warnings_list.append(
                 f"plan_read: {type(exc).__name__}: {str(exc)[:120]}"
             )
@@ -244,6 +248,10 @@ class BaseCadenceGenerator(ABC):
         try:
             trades = self._maybe_fetch_trades(date_et)
         except Exception as exc:
+            print(
+                f"[base_cadence] WARNING: trades_fetch failed: {exc}",
+                file=sys.stderr,
+            )
             warnings_list.append(
                 f"trades_fetch: {type(exc).__name__}: {str(exc)[:120]}"
             )
@@ -263,7 +271,8 @@ class BaseCadenceGenerator(ABC):
             )
             retrospective_md = (
                 "## 🔄 Plan Retrospective / 计划复盘\n\n"
-                f"⚠️ retrospective composition failed: {exc}"
+                f"⚠️ retrospective composition failed: "
+                f"{type(exc).__name__}: {str(exc)[:120]}"
             )
 
         try:
@@ -273,6 +282,10 @@ class BaseCadenceGenerator(ABC):
                 date_et=date_et,
             )
         except Exception as exc:
+            print(
+                f"[base_cadence] WARNING: tomorrow failed: {exc}",
+                file=sys.stderr,
+            )
             warnings_list.append(
                 f"tomorrow: {type(exc).__name__}: {str(exc)[:120]}"
             )
