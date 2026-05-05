@@ -65,6 +65,52 @@ REQUIRED_SECTIONS: dict[str, list[SectionSpec]] = {
         ["Tomorrow Preliminary", "📅 Tomorrow", "明天初步预案", "明天预案"],
         ["数据快照", "Data Snapshot", "Snapshot"],
     ],
+    "intraday-4h": [
+        # Phase 5.5 T5 (2026-05-05) — used by both intraday-4h-1 (07:00 PT)
+        # and intraday-4h-2 (11:00 PT). 4h-1 shows retrospective placeholder;
+        # 4h-2 shows real retrospective. Validator enforces the section
+        # presence either way.
+        ["Lock-in", "🔒 Lock-in"],
+        ["MES", "📊 MES"],
+        ["MNQ", "📊 MNQ"],
+        ["MGC", "📊 MGC"],
+        ["🌐", "Cross-Asset", "跨市场", "跨资产"],
+        ["📰", "Breaking News", "新闻"],
+        ["F. 期货结构", "F-MES", "Futures Positioning", "期货结构"],
+        ["情绪面", "D. 情绪面", "Sentiment Index", "Sentiment"],
+        ["今日交易档案", "Trade Archive", "Today's Trade"],
+        # Plan Retrospective slot — 4h-1 fills with placeholder, 4h-2
+        # fills with real retrospective; both pass:
+        ["Plan Retrospective", "🔄 Plan", "计划复盘"],
+        ["C.", "计划复核", "Plan Adherence"],
+        ["B.", "市场叙事", "Narrative"],
+        # NOTE: A is REQUIRED (unlike EOD which removes A). Intraday is
+        # forward-looking for rest-of-session.
+        ["A.", "建议", "Recommendation"],
+        ["数据快照", "Data Snapshot", "Snapshot"],
+    ],
+    "night": [
+        # Phase 5.5 T5 — D-only learning archive. NO A/B/C/sentiment.
+        ["Lock-in", "🔒 Lock-in"],
+        ["MES", "📊 MES"],
+        ["MNQ", "📊 MNQ"],
+        ["MGC", "📊 MGC"],
+        ["F. 期货结构", "F-MES", "Futures Positioning", "期货结构"],
+        ["📰", "Breaking News", "新闻"],
+        ["D.", "Pattern Archive", "D-Archive", "Archive"],
+        ["数据快照", "Data Snapshot", "Snapshot"],
+    ],
+    "asia": [
+        # Same shape as night — D-only learning archive.
+        ["Lock-in", "🔒 Lock-in"],
+        ["MES", "📊 MES"],
+        ["MNQ", "📊 MNQ"],
+        ["MGC", "📊 MGC"],
+        ["F. 期货结构", "F-MES", "Futures Positioning", "期货结构"],
+        ["📰", "Breaking News", "新闻"],
+        ["D.", "Pattern Archive", "D-Archive", "Archive"],
+        ["数据快照", "Data Snapshot", "Snapshot"],
+    ],
 }
 
 

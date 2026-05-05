@@ -377,3 +377,123 @@ def test_eod_validator_fails_when_breaking_news_section_missing():
     assert not result.ok
     missing_concat = " ".join(result.missing).lower()
     assert "breaking news" in missing_concat or "新闻" in " ".join(result.missing) or "📰" in " ".join(result.missing)
+
+
+INTRADAY_4H_VALID_SAMPLE = """# Intraday 4H Report
+## 🔒 Lock-in Metadata
+status
+## 📊 MES — Multi-TF
+#### D
+x
+#### 4H
+x
+#### 1H
+x
+## 📊 MNQ — Multi-TF
+## 📊 MGC — Multi-TF
+## 🌐 Cross-Asset Narrative
+narr
+## 📰 Breaking News
+news
+## F. 期货结构
+ok
+## D. 情绪面 / Sentiment Index
+ok
+## 今日交易档案 / Today's Trade Archive
+0 trades
+## 🔄 Plan Retrospective / 计划复盘
+n/a (4h-1)
+## C. 计划复核
+ok
+## B. 市场叙事
+narr
+## A. 建议
+A-3 default
+## 📑 数据快照
+ok
+"""
+
+
+def test_validator_intraday_4h_passes_when_all_sections_present():
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    result = v.validate(INTRADAY_4H_VALID_SAMPLE, report_type="intraday-4h")
+    assert result.ok is True, f"missing: {result.missing}"
+
+
+def test_validator_intraday_4h_fails_when_a_section_missing():
+    """Intraday-4h KEEPS A section (unlike EOD which removes it)."""
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    no_a = INTRADAY_4H_VALID_SAMPLE.replace("## A. 建议\nA-3 default\n", "")
+    result = v.validate(no_a, report_type="intraday-4h")
+    assert result.ok is False
+    missing_str = " ".join(result.missing)
+    assert "A" in missing_str or "建议" in missing_str
+
+
+def test_validator_intraday_4h_fails_when_plan_retrospective_missing():
+    """Both 4h-1 and 4h-2 must show retrospective slot (4h-1 has placeholder)."""
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    no_retro = INTRADAY_4H_VALID_SAMPLE.replace(
+        "## 🔄 Plan Retrospective / 计划复盘\nn/a (4h-1)\n", ""
+    )
+    result = v.validate(no_retro, report_type="intraday-4h")
+    assert result.ok is False
+    missing_str = " ".join(result.missing)
+    assert "Retrospective" in missing_str or "复盘" in missing_str
+
+
+NIGHT_ASIA_VALID_SAMPLE = """# Night Report
+## 🔒 Lock-in Metadata
+trades 0/30
+## 📊 MES — Multi-TF
+## 📊 MNQ — Multi-TF
+## 📊 MGC — Multi-TF
+## F. 期货结构
+ok
+## 📰 Breaking News
+none
+## D. Pattern Archive
+patterns
+## 📑 数据快照
+ok
+"""
+
+
+def test_validator_night_passes_when_all_sections_present():
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    result = v.validate(NIGHT_ASIA_VALID_SAMPLE, report_type="night")
+    assert result.ok is True, f"missing: {result.missing}"
+
+
+def test_validator_asia_passes_with_same_required_sections_as_night():
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    result = v.validate(NIGHT_ASIA_VALID_SAMPLE, report_type="asia")
+    assert result.ok is True, f"missing: {result.missing}"
+
+
+def test_validator_night_fails_when_d_archive_section_missing():
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    no_d = NIGHT_ASIA_VALID_SAMPLE.replace(
+        "## D. Pattern Archive\npatterns\n", ""
+    )
+    result = v.validate(no_d, report_type="night")
+    assert result.ok is False
+    missing_str = " ".join(result.missing)
+    assert "Pattern Archive" in missing_str or "Archive" in missing_str or "D." in missing_str
+
+
+def test_validator_night_does_not_require_a_or_b_or_c_sections():
+    """night/asia explicitly lack A/B/C — must NOT enforce them."""
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    assert "## A." not in NIGHT_ASIA_VALID_SAMPLE
+    assert "## B." not in NIGHT_ASIA_VALID_SAMPLE
+    assert "## C." not in NIGHT_ASIA_VALID_SAMPLE
+    result = v.validate(NIGHT_ASIA_VALID_SAMPLE, report_type="night")
+    assert result.ok is True
