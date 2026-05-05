@@ -120,6 +120,19 @@ def test_collector_default_symbols_passed_through():
     assert "AAPL" in captured["input"]
 
 
+def test_collector_default_timeout_is_at_least_240s():
+    """I5 fix 2026-05-05: DEFAULT_TIMEOUT_S was 180 from Phase 4.5 launch
+    but AIAnalyst was bumped to 300s in commit 7603d24 after sentiment
+    Phase 4.5 prompt growth. SentimentCollector inherits the same prompt
+    growth pressure, so 180s under-allocates. Spec recommends 240s
+    (slightly under AIAnalyst since sentiment prompt is smaller)."""
+    assert SentimentCollector.DEFAULT_TIMEOUT_S >= 240, (
+        f"DEFAULT_TIMEOUT_S {SentimentCollector.DEFAULT_TIMEOUT_S}s is too "
+        f"tight for Phase 4.5+ prompt size; sentiment may time out under "
+        f"large news days. Bump to 240+ to match AIAnalyst's 300s budget."
+    )
+
+
 def test_collector_records_raw_on_parse_failure(tmp_path, monkeypatch):
     """When parse fails, the raw response should be saved for debugging."""
     monkeypatch.chdir(tmp_path)

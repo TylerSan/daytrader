@@ -20,7 +20,11 @@ class SentimentCollector:
     caller. The orchestrator must always be able to continue after this.
     """
 
-    DEFAULT_TIMEOUT_S = 180
+    # Bumped 180→240 (I5 fix 2026-05-05) to align with AIAnalyst's 300s
+    # budget after Phase 4.5 prompt growth. 180s was the original Phase
+    # 4.5 launch value; observed sentiment-failure dumps showed timeouts
+    # under large news days.
+    DEFAULT_TIMEOUT_S = 240
 
     def __init__(
         self,
