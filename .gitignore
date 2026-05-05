@@ -28,6 +28,7 @@ data/logs/launchd/*.out
 data/logs/launchd/*.err
 data/logs/launchd/premarket-*.log
 data/logs/launchd/weekly-*.log
+data/logs/launchd/eod-*.log
 !data/logs/launchd/.gitkeep
 
 # Phase 4.5 sentiment parser failure dumps — production runtime forensics
