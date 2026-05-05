@@ -175,3 +175,123 @@ def test_mfe_mae_computed():
     # mae = (7272.75 - 7273.0) / 0.5 = -0.5R (adverse, brief touch above)
     assert out.mfe_r is not None and out.mfe_r > 0
     assert out.mae_r is not None and out.mae_r <= 0
+
+
+# ---------------------------------------------------------------------------
+# Gap-through tests (I9 — caught 2026-05-05 by code-reviewer agent before
+# Trade #1). A limit order at level.price only fills when the bar's range
+# straddles the level (bar.low <= level <= bar.high). If the bar gaps
+# entirely above (short_fade) or below (long_fade) the level, no fill —
+# but the pre-fix simulator falsely registered first-touch.
+# ---------------------------------------------------------------------------
+
+
+def test_short_fade_point_gap_through_does_not_trigger():
+    """short_fade POINT at 7272.75 — first bar gaps ENTIRELY above level
+    (low=7280 > 7272.75). Limit short at 7272.75 cannot fill — no touch."""
+    level = PlanLevel(
+        price=7272.75, level_type="POINT", source="4H POC", direction="short_fade"
+    )
+    bars = [
+        # Yesterday close was 7250 (below level); today opens 7282 (gap up
+        # past entire level). Bar.low=7280 > 7272.75 — limit at 7272.75 doesn't fill.
+        _bar("06:30", 7282.0, 7290.0, 7280.0, 7285.0),
+        # Subsequent bars also stay above
+        _bar("07:00", 7285.0, 7288.0, 7283.0, 7286.0),
+    ]
+    out = simulate_level(level, bars, None, tick_size=0.25, stop_offset_ticks=2, target_r_multiple=2.0)
+    assert out.triggered is False, (
+        f"short_fade POINT must NOT trigger when bar gaps above level — "
+        f"bar.low={bars[0].low} > level.price={level.price}"
+    )
+    assert out.outcome == "untriggered"
+
+
+def test_long_fade_point_gap_through_does_not_trigger():
+    """long_fade POINT at 7240.75 — first bar gaps ENTIRELY below level
+    (high=7235 < 7240.75). Limit long at 7240.75 cannot fill — no touch."""
+    level = PlanLevel(
+        price=7240.75, level_type="POINT", source="D low", direction="long_fade"
+    )
+    bars = [
+        # Gap down: bar.high=7235 < 7240.75 — limit long at 7240.75 doesn't fill.
+        _bar("06:30", 7232.0, 7235.0, 7228.0, 7233.0),
+        _bar("07:00", 7233.0, 7236.0, 7230.0, 7234.0),
+    ]
+    out = simulate_level(level, bars, None, tick_size=0.25, stop_offset_ticks=2, target_r_multiple=2.0)
+    assert out.triggered is False, (
+        f"long_fade POINT must NOT trigger when bar gaps below level — "
+        f"bar.high={bars[0].high} < level.price={level.price}"
+    )
+    assert out.outcome == "untriggered"
+
+
+def test_short_fade_point_straddle_does_trigger():
+    """Sanity: short_fade POINT DOES trigger when the bar's range straddles
+    the level (bar.low <= level <= bar.high). This is the normal touch case."""
+    level = PlanLevel(
+        price=7272.75, level_type="POINT", source="4H POC", direction="short_fade"
+    )
+    bars = [
+        # Bar straddles level: low=7270 < 7272.75 < high=7274
+        _bar("06:30", 7270.0, 7274.0, 7270.0, 7272.0),
+        _bar("07:00", 7272.0, 7272.5, 7270.0, 7270.5),
+    ]
+    out = simulate_level(level, bars, None, tick_size=0.25, stop_offset_ticks=2, target_r_multiple=2.0)
+    assert out.triggered is True
+
+
+def test_long_fade_point_straddle_does_trigger():
+    """Sanity: long_fade POINT DOES trigger when bar straddles level."""
+    level = PlanLevel(
+        price=7240.75, level_type="POINT", source="D low", direction="long_fade"
+    )
+    bars = [
+        # Bar straddles: low=7239 < 7240.75 < high=7242
+        _bar("06:30", 7242.0, 7242.0, 7239.0, 7240.0),
+        _bar("07:00", 7240.0, 7242.0, 7240.0, 7241.5),
+    ]
+    out = simulate_level(level, bars, None, tick_size=0.25, stop_offset_ticks=2, target_r_multiple=2.0)
+    assert out.triggered is True
+
+
+def test_short_fade_zone_gap_through_does_not_trigger():
+    """short_fade ZONE [7271, 7279.5] — first bar gaps entirely ABOVE the
+    zone. No fill at near-edge (zone_low=7271)."""
+    level = PlanLevel(
+        price=7275.0,
+        level_type="ZONE",
+        zone_low=7271.0,
+        zone_high=7279.5,
+        source="4H supply",
+        direction="short_fade",
+    )
+    bars = [
+        # Bar entirely above zone: low=7282 > 7279.5 (zone_high). Limit short
+        # at zone_low=7271 doesn't fill.
+        _bar("06:30", 7282.0, 7290.0, 7280.0, 7285.0),
+        _bar("07:00", 7285.0, 7288.0, 7281.0, 7286.0),
+    ]
+    out = simulate_level(level, bars, None, tick_size=0.25, stop_offset_ticks=2, target_r_multiple=2.0)
+    assert out.triggered is False, "short_fade ZONE must not trigger when bars gap above zone"
+
+
+def test_long_fade_zone_gap_through_does_not_trigger():
+    """long_fade ZONE [7240, 7245] — first bar gaps entirely BELOW the
+    zone. No fill at near-edge (zone_high=7245)."""
+    level = PlanLevel(
+        price=7242.5,
+        level_type="ZONE",
+        zone_low=7240.0,
+        zone_high=7245.0,
+        source="D demand",
+        direction="long_fade",
+    )
+    bars = [
+        # Bar entirely below zone: high=7235 < 7240 (zone_low). Limit long at
+        # zone_high=7245 doesn't fill.
+        _bar("06:30", 7232.0, 7235.0, 7228.0, 7233.0),
+        _bar("07:00", 7233.0, 7238.0, 7231.0, 7234.0),
+    ]
+    out = simulate_level(level, bars, None, tick_size=0.25, stop_offset_ticks=2, target_r_multiple=2.0)
+    assert out.triggered is False, "long_fade ZONE must not trigger when bars gap below zone"

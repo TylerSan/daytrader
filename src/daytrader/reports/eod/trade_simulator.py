@@ -97,33 +97,31 @@ def simulate_level(
 
 
 def _find_first_touch(level: PlanLevel, bars: list[Any]) -> int | None:
-    """Return index of first bar that touches the level (within bar's H/L range)."""
-    if level.level_type == "POINT":
-        target_price = level.price
-        for i, bar in enumerate(bars):
-            if level.direction == "short_fade":
-                # short fade: price rises into level → high reaches level
-                if bar.high >= target_price:
-                    return i
-            else:
-                # long fade: price drops into level → low reaches level
-                if bar.low <= target_price:
-                    return i
-        return None
-    else:  # ZONE
-        if level.direction == "short_fade":
-            # short fade entry @ near-edge (lower edge of zone for short)
-            target_price = level.zone_low if level.zone_low is not None else level.price
-            for i, bar in enumerate(bars):
-                if bar.high >= target_price:
-                    return i
-        else:
-            # long fade entry @ near-edge (upper edge of zone for long)
-            target_price = level.zone_high if level.zone_high is not None else level.price
-            for i, bar in enumerate(bars):
-                if bar.low <= target_price:
-                    return i
-        return None
+    """Return index of first bar whose range straddles the entry price.
+
+    A limit order at the entry price only fills when the bar's range
+    *contains* the entry — i.e. ``bar.low <= entry_price <= bar.high``.
+    If the bar gaps entirely past the entry (e.g. opens above for a
+    short_fade, below for a long_fade), the limit order never executes
+    even though the older asymmetric check (``bar.high >= entry`` for
+    short_fade) returned True.
+
+    Regression: caught 2026-05-05 by code-reviewer agent (I9) before
+    Trade #1. Pre-fix: a gap-up morning falsely registered every
+    short_fade level as "touched" → simulator walked forward and
+    reported false target/stop fills, polluting plan_retrospective_daily
+    with phantom trades. Symmetric for long_fade gap-down mornings.
+
+    POINT entry = level.price (limit at exact level).
+    ZONE short_fade entry = zone_low (lower edge — approached from below).
+    ZONE long_fade entry = zone_high (upper edge — approached from above).
+    """
+    target_price = _entry_for_direction(level)
+    for i, bar in enumerate(bars):
+        # Bar must straddle the entry price: low <= entry <= high.
+        if bar.low <= target_price <= bar.high:
+            return i
+    return None
 
 
 def _entry_for_direction(level: PlanLevel) -> float:
