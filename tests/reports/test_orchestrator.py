@@ -358,3 +358,44 @@ def test_run_eod_marks_validation_failure(tmp_path):
     assert "validation" in (result.failure_reason or "").lower()
     report_row = state.get_report_by_id(result.report_id)
     assert report_row["status"] == "failed"
+
+
+# ---------------------------------------------------------------------------
+# C2 — intraday fetcher uses date_et to pin end_time (not "now")
+# Caught 2026-05-05 by code-reviewer agent. Pre-fix the lambda was:
+#   lambda sym, d: self.ib_client.get_bars(symbol=sym, timeframe="5m", bars=78)
+# discarding `d` and defaulting end_time=None → "now". Backfilling Monday's
+# EOD on Tuesday morning thus fetched Tuesday morning's bars instead of
+# Monday's full session — wrong day's data into plan_retrospective_daily.
+# ---------------------------------------------------------------------------
+
+
+def test_intraday_fetcher_pins_end_time_to_date_et_rth_close(tmp_path):
+    """Orchestrator._make_intraday_fetcher returns a closure that calls
+    ib_client.get_bars with end_time = <date_et> 16:00 ET (= RTH close)
+    so backfill runs see the correct trading day's bars, not "now"."""
+    fake_ib = _eod_fake_ib()
+    fake_ai = MagicMock()
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+
+    fetcher = orchestrator._make_intraday_fetcher()
+    fetcher("MES", "2026-05-04")
+
+    # Verify get_bars was called with the right end_time
+    assert fake_ib.get_bars.called
+    call_kwargs = fake_ib.get_bars.call_args.kwargs
+    assert call_kwargs["symbol"] == "MES"
+    assert call_kwargs["timeframe"] == "5m"
+    assert call_kwargs["bars"] == 78
+    end_time = call_kwargs.get("end_time")
+    assert end_time is not None, (
+        "fetcher must pass end_time to pin the bar window to date_et — "
+        "default 'now' fetches the wrong trading day on backfill runs"
+    )
+    # Should be 2026-05-04 16:00 ET (RTH close)
+    from zoneinfo import ZoneInfo
+    ET = ZoneInfo("America/New_York")
+    expected = datetime(2026, 5, 4, 16, 0, tzinfo=ET)
+    assert end_time == expected, (
+        f"end_time mismatch: got {end_time!r}, expected {expected!r}"
+    )

@@ -264,6 +264,35 @@ class Orchestrator:
             report_path=write_result.path,
         )
 
+    def _make_intraday_fetcher(self):
+        """Build the intraday_bar_fetcher closure for PlanRetrospective.
+
+        PlanRetrospective.compose() calls ``fetcher(symbol, date_et)`` to
+        get one full RTH session of 5m bars for the simulator. The closure
+        pins ``end_time`` to ``date_et 16:00 ET`` (RTH cash close) so:
+
+        1. Same-day 14:00 PT auto-fire (= 17:00 ET) sees a fully-closed
+           RTH session ending at 16:00 ET.
+        2. Backfill runs (e.g. Tuesday morning re-running Monday's failed
+           EOD) still fetch Monday's session, NOT Tuesday morning's
+           in-progress data. Pre-fix: end_time=None defaulted to "now"
+           and silently corrupted plan_retrospective_daily on backfill.
+
+        Caught 2026-05-05 by code-reviewer agent (C2). 78 5m bars covers
+        6.5h × 12 bars/h = one full RTH session.
+        """
+        def _fetch(symbol: str, date_et: str):
+            from datetime import time
+            date = datetime.strptime(date_et, "%Y-%m-%d").date()
+            end_time = datetime.combine(date, time(16, 0), tzinfo=ET)
+            return self.ib_client.get_bars(
+                symbol=symbol,
+                timeframe="5m",
+                bars=78,
+                end_time=end_time,
+            )
+        return _fetch
+
     def run_eod(self, run_at: datetime) -> PipelineResult:
         """Execute one EOD pipeline run (Phase 5 T10).
 
@@ -350,16 +379,10 @@ class Orchestrator:
             plan_parser = PremarketPlanParser()
             trades_query = TodayTradesQuery(self.journal_db_path)
 
-            # CRITICAL adapter: PlanRetrospective expects
-            # ``intraday_bar_fetcher(symbol, date_et) -> list[OHLCV]`` but
-            # IBClient.get_bars takes ``(symbol, timeframe, bars)``. 78 5m
-            # bars covers a full RTH session (6.5h × 12 bars/h).
             retrospective = PlanRetrospective(
                 plan_parser=plan_parser,
                 trade_simulator=simulate_level,
-                intraday_bar_fetcher=lambda sym, d: self.ib_client.get_bars(
-                    symbol=sym, timeframe="5m", bars=78,
-                ),
+                intraday_bar_fetcher=self._make_intraday_fetcher(),
                 trades_query=trades_query,
                 state_db_path=self.state_db._path,
             )
