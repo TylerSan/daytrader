@@ -197,6 +197,133 @@ class PromptBuilder:
             {"role": "user", "content": user_text},
         ]
 
+    def build_intraday_4h(
+        self,
+        cadence_label: str,                # "intraday-4h-1" | "intraday-4h-2"
+        context: ReportContext,
+        bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]],
+        tradable_symbols: list[str],
+        news_items: list[dict[str, Any]],
+        run_timestamp_pt: str,
+        run_timestamp_et: str,
+        futures_data: "FuturesSection | None" = None,
+        sentiment_md: str = "",
+        today_plan_blocks: dict[str, str] | None = None,
+        today_trades: list[dict[str, Any]] | None = None,
+        retrospective_md: str = "",
+        tomorrow_preliminary_md: str = "",  # always "" for intraday
+    ) -> list[dict[str, Any]]:
+        """Build intraday-4h prompt (used by both 4h-1 and 4h-2).
+
+        Section order per spec §3.6 + §6.1: metadata → multi-TF (D/4H/1H)
+        → cross-asset → news → F → sentiment → trades → [retrospective
+        for 4h-2] → C → B → A → snapshot. The verbatim grounding inputs
+        (today_plan_blocks, retrospective_md, today_trades) are embedded
+        into the user message so the AI can quote them directly.
+        """
+        template = load_template("intraday_4h")
+        contract_section = (
+            context.contract_text
+            if context.contract_text is not None
+            else "Contract.md: not yet filled by user"
+        )
+
+        system_blocks = [
+            {
+                "type": "text",
+                "text": template,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": f"## Contract.md content\n\n{contract_section}",
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": f"## Cadence label\n\n{cadence_label}",
+                "cache_control": {"type": "ephemeral"},
+            },
+        ]
+
+        lock_in_block = self._build_lock_in_block(context)
+        bars_block = self._build_multi_symbol_bars_block(bars_by_symbol_and_tf)
+        futures_block = self._build_futures_section_block(futures_data)
+        news_block = self._build_news_block(news_items)
+        tradable_block = (
+            f"## Tradable symbols (count toward 30-trade lock-in)\n"
+            f"{', '.join(tradable_symbols)}\n\n"
+            f"All other symbols are context-only — describe but NO plan."
+        )
+
+        sentiment_block = sentiment_md.strip() if sentiment_md else ""
+        retrospective_block = retrospective_md.strip() if retrospective_md else ""
+        plan_blocks = today_plan_blocks or {}
+        trades_list = today_trades or []
+
+        # Verbatim plan blocks for C section
+        plan_section_md = ""
+        if plan_blocks:
+            plan_section_md = (
+                "## Today's premarket plan blocks "
+                "(verbatim — quote in C section)\n\n"
+            )
+            plan_section_md += "\n\n".join(
+                f"### Today's premarket C-{sym} (verbatim)\n\n{block}"
+                for sym, block in plan_blocks.items()
+            )
+        else:
+            plan_section_md = (
+                "## Today's premarket plan blocks\n\n"
+                "⚠️ premarket plan 未找到 — C 段降级，复盘跳过"
+            )
+
+        # Trades light list (no §6/§9 audit per Q3 decision)
+        trades_section_md = ""
+        if trades_list:
+            trades_section_md = "## Today's trades (since 06:30 PT, light list)\n\n"
+            trades_section_md += "| # | time | symbol | side | entry | exit | R |\n"
+            trades_section_md += "|---|---|---|---|---|---|---|\n"
+            for i, t in enumerate(trades_list, start=1):
+                trades_section_md += (
+                    f"| {i} | {t.get('time_pt', '?')} | "
+                    f"{t.get('symbol', '?')} | {t.get('side', '?')} | "
+                    f"{t.get('entry', '?')} | {t.get('exit', '?')} | "
+                    f"{t.get('r', '?')} |\n"
+                )
+        else:
+            trades_section_md = "## Today's trades\n\n(0 trades since 06:30 PT)"
+
+        composed_blocks: list[str] = [futures_block]
+        if sentiment_block:
+            composed_blocks.append(sentiment_block)
+        if trades_section_md:
+            composed_blocks.append(trades_section_md)
+        if retrospective_block:
+            composed_blocks.append(retrospective_block)
+        else:
+            composed_blocks.append(
+                "## 🔄 Plan Retrospective / 计划复盘\n\n"
+                "⏭️  Retrospective deferred to 4h-2 (11:00 PT) "
+                "— too few level touches in first 30min of RTH"
+            )
+        composed_blocks.append(plan_section_md)
+        composed_md = "\n\n".join(b for b in composed_blocks if b)
+
+        user_text = (
+            f"# Intraday 4H ({cadence_label}) — {run_timestamp_pt} ({run_timestamp_et})\n\n"
+            f"{lock_in_block}\n\n"
+            f"{bars_block}\n\n"
+            f"{news_block}\n\n"
+            f"{composed_md}\n\n"
+            f"{tradable_block}"
+        )
+
+        return [
+            {"role": "system", "content": system_blocks},
+            {"role": "user", "content": user_text},
+        ]
+
     @staticmethod
     def _build_lock_in_block(ctx: ReportContext) -> str:
         return (

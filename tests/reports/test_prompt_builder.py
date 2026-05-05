@@ -518,3 +518,95 @@ def test_build_premarket_still_emits_1H_block_for_premarket_shape_input():
     full_text = _joined_prompt_text(msgs)
     assert "#### 1H" in full_text, "Premarket prompt MUST still render 1H block"
     assert "5246.5" in full_text  # the 1H bar's close should show up
+
+
+def test_build_intraday_4h_loads_template_and_returns_messages():
+    """build_intraday_4h returns 2 messages (system + user) with the
+    intraday_4h.md template embedded as system content."""
+    pb = PromptBuilder()
+    msgs = pb.build_intraday_4h(
+        cadence_label="intraday-4h-1",
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf={
+            "MES": {"1D": [], "4H": [], "1H": []},
+            "MNQ": {"1D": [], "4H": [], "1H": []},
+            "MGC": {"1D": [], "4H": [], "1H": []},
+        },
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="07:00 PT",
+        run_timestamp_et="10:00 ET",
+        sentiment_md="## D. 情绪面\nmacro +3\n",
+        today_plan_blocks={"MES": "**plan**\n- entry 5240\n"},
+        today_trades=[],
+        retrospective_md="",  # 4h-1: empty
+        tomorrow_preliminary_md="",  # never for intraday
+    )
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "system"
+    assert msgs[1]["role"] == "user"
+    full = _joined_prompt_text(msgs)
+    # Template loaded
+    assert "Intraday 4H Report Template" in full
+    # Cadence label embedded
+    assert "intraday-4h-1" in full
+    # User-provided inputs embedded
+    assert "macro +3" in full
+    assert "entry 5240" in full
+
+
+def test_build_intraday_4h_2_includes_retrospective_when_provided():
+    """4h-2 passes retrospective_md; it must appear verbatim in user content."""
+    pb = PromptBuilder()
+    retro = "## 🔄 Plan Retrospective\n| MES | 1/3 triggered |\n"
+    msgs = pb.build_intraday_4h(
+        cadence_label="intraday-4h-2",
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf={
+            "MES": {"1D": [], "4H": [], "1H": []},
+            "MNQ": {"1D": [], "4H": [], "1H": []},
+            "MGC": {"1D": [], "4H": [], "1H": []},
+        },
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="11:00 PT",
+        run_timestamp_et="14:00 ET",
+        sentiment_md="",
+        today_plan_blocks={},
+        today_trades=[],
+        retrospective_md=retro,
+        tomorrow_preliminary_md="",
+    )
+    full = _joined_prompt_text(msgs)
+    assert "Plan Retrospective" in full
+    assert "1/3 triggered" in full
+
+
+def test_build_intraday_4h_omits_1h_block_for_intraday_shape_input():
+    """C3-style guard: only render TFs in input dict — intraday-4h dict has
+    1D/4H/1H, all should appear."""
+    pb = PromptBuilder()
+    bars = {
+        "MES": {
+            "1D": [_ohlcv(datetime(2026, 5, 5, 13, tzinfo=timezone.utc), 5246.0)],
+            "4H": [],
+            "1H": [_ohlcv(datetime(2026, 5, 5, 13, tzinfo=timezone.utc), 5247.0)],
+        },
+        "MNQ": {"1D": [], "4H": [], "1H": []},
+        "MGC": {"1D": [], "4H": [], "1H": []},
+    }
+    msgs = pb.build_intraday_4h(
+        cadence_label="intraday-4h-1",
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=bars,
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="07:00 PT",
+        run_timestamp_et="10:00 ET",
+    )
+    full = _joined_prompt_text(msgs)
+    assert "#### 1D" in full
+    assert "#### 4H" in full
+    assert "#### 1H" in full
+    # No W placeholder (intraday doesn't fetch W):
+    assert "#### 1W" not in full
