@@ -125,6 +125,118 @@ def test_eod_generator_calls_all_components():
     assert fake_ib.get_bars.call_count == 12
 
 
+def test_eod_generator_records_warning_when_retrospective_fails():
+    """When retrospective.compose() raises, EODOutcome.warnings should
+    capture the failure for the orchestrator to log into state.failures.
+
+    Pre-fix (caught 2026-05-05 by code-reviewer agent I1): the failure
+    was only written into the report markdown as
+    "⚠️ retrospective composition failed: {exc}" — Trade #1 morning user
+    couldn't tell from a quick state.failures scan that retrospective
+    silently broke the day before.
+    """
+    fake_ib = MagicMock()
+    fake_ib.get_bars.return_value = [_ohlcv(5240.0)]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
+
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result_with_all_eod_sections()
+
+    fake_plan_reader = MagicMock()
+    fake_plan_reader.read_today_plan.return_value = {"MES": "raw block"}
+
+    fake_trades_query = MagicMock()
+    fake_trades_query.trades_for_date.return_value = []
+    fake_trades_query.audit_summary.return_value = {
+        "count": 0, "daily_r": 0.0, "violations_total": 0,
+        "screenshots_complete": 0, "per_trade_violations": {},
+    }
+
+    # Retrospective will blow up on .compose
+    fake_retrospective = MagicMock()
+    fake_retrospective.compose.side_effect = ValueError("simulator exploded")
+
+    fake_tomorrow = MagicMock()
+    fake_tomorrow.build_input_data.return_value = "tomorrow data"
+
+    gen = EODGenerator(
+        ib_client=fake_ib,
+        ai_analyst=fake_ai,
+        symbols=["MES"],
+        tradable_symbols=["MES"],
+        plan_reader=fake_plan_reader,
+        plan_parser=MagicMock(),
+        trades_query=fake_trades_query,
+        retrospective=fake_retrospective,
+        tomorrow_planner=fake_tomorrow,
+    )
+    outcome = gen.generate(
+        context=_ctx(),
+        date_et="2026-05-04",
+        run_timestamp_pt="14:00 PT",
+        run_timestamp_et="17:00 ET",
+        sentiment_md="",
+    )
+
+    # The pipeline still completes (degraded), but warnings should record it.
+    assert outcome.warnings, "EODOutcome.warnings must capture retrospective failure"
+    assert any("retrospective" in w for w in outcome.warnings), (
+        f"warnings must mention 'retrospective': got {outcome.warnings!r}"
+    )
+    assert any("simulator exploded" in w for w in outcome.warnings), (
+        f"warnings must include the underlying exception: got {outcome.warnings!r}"
+    )
+
+
+def test_eod_generator_warnings_empty_when_all_components_succeed():
+    """Sanity: warnings tuple is empty on the happy path."""
+    fake_ib = MagicMock()
+    fake_ib.get_bars.return_value = [_ohlcv(5240.0)]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
+
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result_with_all_eod_sections()
+
+    fake_plan_reader = MagicMock()
+    fake_plan_reader.read_today_plan.return_value = {"MES": "raw block"}
+
+    fake_trades_query = MagicMock()
+    fake_trades_query.trades_for_date.return_value = []
+    fake_trades_query.audit_summary.return_value = {
+        "count": 0, "daily_r": 0.0, "violations_total": 0,
+        "screenshots_complete": 0, "per_trade_violations": {},
+    }
+
+    fake_retrospective = MagicMock()
+    fake_retrospective.compose.return_value = {}
+    fake_retrospective.persist = MagicMock()
+
+    fake_tomorrow = MagicMock()
+    fake_tomorrow.build_input_data.return_value = "x"
+
+    gen = EODGenerator(
+        ib_client=fake_ib,
+        ai_analyst=fake_ai,
+        symbols=["MES"],
+        tradable_symbols=["MES"],
+        plan_reader=fake_plan_reader,
+        plan_parser=MagicMock(),
+        trades_query=fake_trades_query,
+        retrospective=fake_retrospective,
+        tomorrow_planner=fake_tomorrow,
+    )
+    outcome = gen.generate(
+        context=_ctx(),
+        date_et="2026-05-04",
+        run_timestamp_pt="14:00 PT",
+        run_timestamp_et="17:00 ET",
+        sentiment_md="",
+    )
+    assert outcome.warnings == (), (
+        f"happy path warnings must be empty: got {outcome.warnings!r}"
+    )
+
+
 def test_eod_generator_handles_missing_premarket_file_gracefully():
     """If premarket file missing, plan_reader returns {} and pipeline still completes."""
     fake_ib = MagicMock()

@@ -50,6 +50,11 @@ class EODOutcome:
     validation: ValidationResult
     retrospective_rows: dict[str, RetrospectiveRow]
     bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]] | None = None
+    # Non-fatal failures during generation (e.g. retrospective compose
+    # raised, sentiment subprocess timed out) — orchestrator surfaces these
+    # to state.failures so post-Trade-#1 the user can audit silent failures.
+    # Format: each entry is "stage: reason", e.g. "retrospective: ValueError: bad input".
+    warnings: tuple[str, ...] = ()
 
 
 class EODGenerator:
@@ -107,6 +112,10 @@ class EODGenerator:
         sentiment_md: str = "",
     ) -> EODOutcome:
         """Run the EOD pipeline end-to-end and return the outcome."""
+
+        # Track non-fatal failures (retrospective, F-section, news, etc.)
+        # so the orchestrator can persist them to state.failures.
+        warnings_list: list[str] = []
 
         # Step 1: fetch multi-TF bars per symbol (W/D/4H).
         bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]] = {}
@@ -210,6 +219,13 @@ class EODGenerator:
                     f"[eod_generator] WARNING: retrospective failed: {exc}",
                     file=sys.stderr,
                 )
+                # Surface to orchestrator → state.failures (I1 fix
+                # 2026-05-05). Pre-fix this only landed in markdown
+                # so silent failures only surfaced if user re-read the
+                # report; now they appear in `daytrader admin failures`.
+                warnings_list.append(
+                    f"retrospective: {type(exc).__name__}: {str(exc)[:200]}"
+                )
                 retrospective_md = (
                     "## 🔄 Plan Retrospective / 计划复盘\n\n"
                     f"⚠️ retrospective composition failed: {exc}"
@@ -266,6 +282,7 @@ class EODGenerator:
             validation=validation,
             retrospective_rows=retrospective_rows,
             bars_by_symbol_and_tf=bars_by_symbol_and_tf,
+            warnings=tuple(warnings_list),
         )
 
     @staticmethod

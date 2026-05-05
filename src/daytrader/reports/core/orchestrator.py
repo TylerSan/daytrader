@@ -410,6 +410,20 @@ class Orchestrator:
                 sentiment_md=sentiment_md,
             )
 
+            # I1 fix 2026-05-05: surface non-fatal pipeline failures
+            # (e.g. retrospective.compose() blew up but the report still
+            # generated) to state.failures so the user can audit them
+            # without re-reading the report markdown.
+            for warning in outcome.warnings:
+                stage, _, reason = warning.partition(": ")
+                self.state_db.log_failure(
+                    report_type="eod",
+                    scheduled_at=run_at,
+                    failure_stage=stage or "unknown",
+                    failure_reason=reason or warning,
+                    retry_count=0,
+                )
+
             if not outcome.validation.ok:
                 self.state_db.update_report_status(
                     report_id,

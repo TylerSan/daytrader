@@ -370,6 +370,54 @@ def test_run_eod_marks_validation_failure(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+def test_run_eod_persists_warnings_to_state_failures(tmp_path):
+    """When EODGenerator returns warnings (non-fatal failures during the
+    pipeline), orchestrator must persist each one via state.log_failure
+    so the user can audit them. I1 fix 2026-05-05."""
+    fake_ib = _eod_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_EOD_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+
+    # Patch the EODGenerator class within run_eod so .generate() returns
+    # an outcome with non-empty warnings, regardless of the real pipeline.
+    from daytrader.reports.types.eod import EODOutcome
+    from daytrader.reports.core.output_validator import ValidationResult
+
+    fake_outcome = EODOutcome(
+        report_text=VALID_EOD_REPORT,
+        ai_result=_ai_result(text=VALID_EOD_REPORT),
+        validation=ValidationResult(ok=True, missing=[]),
+        retrospective_rows={},
+        bars_by_symbol_and_tf={},
+        warnings=(
+            "retrospective: ValueError: simulator exploded",
+            "tomorrow: KeyError: missing sentiment field",
+        ),
+    )
+
+    # EODGenerator is lazy-imported inside run_eod, so patch the source module.
+    with patch(
+        "daytrader.reports.types.eod.EODGenerator"
+    ) as mock_gen_cls:
+        mock_gen_cls.return_value.generate.return_value = fake_outcome
+        result = orchestrator.run_eod(
+            run_at=datetime(2026, 5, 4, 21, tzinfo=timezone.utc),
+        )
+        assert result.success is True
+
+    # Both warnings must appear in state.failures
+    failures = state.list_unresolved_failures()
+    stages = sorted(f["failure_stage"] for f in failures)
+    assert stages == ["retrospective", "tomorrow"], (
+        f"expected stages ['retrospective', 'tomorrow'], got {stages!r}"
+    )
+    reasons = {f["failure_stage"]: f["failure_reason"] for f in failures}
+    assert "ValueError: simulator exploded" in reasons["retrospective"]
+    assert "KeyError" in reasons["tomorrow"]
+
+
 def test_intraday_fetcher_pins_end_time_to_date_et_rth_close(tmp_path):
     """Orchestrator._make_intraday_fetcher returns a closure that calls
     ib_client.get_bars with end_time = <date_et> 16:00 ET (= RTH close)
