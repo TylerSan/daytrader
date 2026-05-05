@@ -76,11 +76,21 @@ class PlanRetrospective:
                 if outcome.triggered:
                     triggered += 1
 
-            # Actual R for this symbol from journal
+            # Actual R for this symbol from journal — closed trades only.
+            # Open trades have pnl_usd=None and correctly contribute 0R.
+            symbol_trades = [
+                t for t in actual_trades if t.get("symbol") == symbol
+            ]
             symbol_actual_r = sum(
                 (float(t.get("pnl_usd", 0) or 0) / 50.0)
-                for t in actual_trades
-                if t.get("symbol") == symbol
+                for t in symbol_trades
+            )
+            # I2 fix 2026-05-05: count open trades so gap_r interpretation
+            # isn't misleading. If user has open MES position when EOD
+            # runs, sim_total_r counts the partial but actual_total_r
+            # treats it as 0 — gap_r looks falsely large until exit.
+            open_trades_count = sum(
+                1 for t in symbol_trades if t.get("pnl_usd") is None
             )
 
             out[symbol] = RetrospectiveRow(
@@ -92,6 +102,7 @@ class PlanRetrospective:
                 actual_total_r=symbol_actual_r,
                 gap_r=sim_total - symbol_actual_r,
                 per_level_outcomes=outcomes,
+                open_trades_count=open_trades_count,
             )
 
         return out

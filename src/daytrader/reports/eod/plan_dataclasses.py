@@ -79,6 +79,12 @@ class RetrospectiveRow:
     total_levels: int
     triggered_count: int
     sim_total_r: float              # sum of all levels' sim_r
-    actual_total_r: float           # from journal DB
+    actual_total_r: float           # from journal DB (closed trades only)
     gap_r: float                    # sim - actual
     per_level_outcomes: list[tuple[PlanLevel, SimOutcome]]
+    # I2 fix 2026-05-05: open trades have pnl_usd=None and contribute 0
+    # to actual_total_r — but if user has open MES position when EOD
+    # runs, gap_r looks falsely large because sim accounts for partial
+    # outcomes while actual doesn't. Surface the count so the report
+    # render can append "(N open trades not in actual_r)" caveat.
+    open_trades_count: int = 0

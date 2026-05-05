@@ -354,12 +354,21 @@ class EODGenerator:
                     f"{out.sim_target if out.sim_target is not None else '-'} | "
                     f"{out.outcome} | {out.sim_r:+.2f} |"
                 )
+            summary_parts = [
+                f"{row.triggered_count}/{row.total_levels} triggered",
+                f"sim total {row.sim_total_r:+.2f}R",
+                f"actual {row.actual_total_r:+.2f}R",
+                f"gap {row.gap_r:+.2f}R",
+            ]
+            # I2 fix 2026-05-05: surface open-trade count so user
+            # understands gap_r when there are unrealized positions.
+            if row.open_trades_count > 0:
+                summary_parts.append(
+                    f"⚠️ {row.open_trades_count} open trade(s) — "
+                    f"unrealized R not in actual"
+                )
             lines.append(
-                f"\n**{symbol} summary**: "
-                f"{row.triggered_count}/{row.total_levels} triggered, "
-                f"sim total {row.sim_total_r:+.2f}R, "
-                f"actual {row.actual_total_r:+.2f}R, "
-                f"gap {row.gap_r:+.2f}R"
+                f"\n**{symbol} summary**: " + ", ".join(summary_parts)
             )
         lines.append("")
         lines.append(

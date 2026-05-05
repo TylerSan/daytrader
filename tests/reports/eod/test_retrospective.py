@@ -150,6 +150,105 @@ def test_aggregate_stats_match_outcomes(tmp_path):
     assert row.gap_r == pytest.approx(1.0)
 
 
+def test_open_trades_excluded_from_actual_r_but_counted(tmp_path):
+    """I2 fix 2026-05-05: when actual_trades contains open positions
+    (pnl_usd=None), they correctly contribute 0 to actual_total_r — but
+    RetrospectiveRow.open_trades_count must surface the fact, otherwise
+    gap_r is misleading (sim counts triggered-but-open levels with their
+    partial_r; if user has matching open trade, gap_r looks larger than
+    it really is).
+    """
+    db_path = tmp_path / "state.db"
+    _init_state_db(db_path)
+
+    fake_parser = MagicMock()
+    fake_parser.parse.return_value = MagicMock(
+        symbol="MES",
+        levels=[
+            PlanLevel(price=7272.75, level_type="POINT", source="P1", direction="short_fade"),
+        ],
+        raw_block_md="", parse_warnings=[],
+        stop_offset_ticks=2, target_r_multiple=2.0,
+    )
+
+    fake_simulator = MagicMock()
+    # Simulator says level triggered with partial_r=1.5R (open at session end)
+    fake_simulator.return_value = SimOutcome(
+        triggered=True, touch_time_pt="06:53",
+        touch_bar_high=7273.5, touch_bar_low=7268.0,
+        sim_entry=7272.75, sim_stop=7273.25, sim_target=7271.75,
+        outcome="open", sim_r=1.5, mfe_r=1.5, mae_r=-0.4,
+    )
+    fake_bar_fetcher = MagicMock(return_value=[])
+
+    fake_trades_query = MagicMock()
+    # User has 2 trades: 1 closed (+1R = +$50), 1 still open (pnl_usd=None)
+    fake_trades_query.trades_for_date.return_value = [
+        {"symbol": "MES", "pnl_usd": 50.0, "side": "long"},
+        {"symbol": "MES", "pnl_usd": None,  "side": "short"},  # open
+    ]
+    fake_trades_query.audit_summary.return_value = {"daily_r": 1.0}
+
+    retrospective = PlanRetrospective(
+        plan_parser=fake_parser, trade_simulator=fake_simulator,
+        intraday_bar_fetcher=fake_bar_fetcher, trades_query=fake_trades_query,
+        state_db_path=db_path,
+    )
+    rows = retrospective.compose(
+        plans={"MES": "raw"},
+        symbols=["MES"],
+        date_et="2026-05-04",
+        tick_sizes={"MES": 0.25},
+    )
+    row = rows["MES"]
+
+    # actual_total_r = 50/50 = +1.0R (open trade contributes 0)
+    assert row.actual_total_r == pytest.approx(1.0)
+    # sim_total_r = +1.5 (the open partial)
+    assert row.sim_total_r == pytest.approx(1.5)
+    # gap_r = 0.5 (sim is more optimistic by 0.5R because the open
+    # position's partial isn't realized)
+    assert row.gap_r == pytest.approx(0.5)
+    # NEW field: open_trades_count
+    assert row.open_trades_count == 1, (
+        f"open_trades_count must be 1 — got {row.open_trades_count!r}"
+    )
+
+
+def test_open_trades_count_zero_when_all_trades_closed(tmp_path):
+    """Sanity: open_trades_count == 0 when every trade has a realized
+    pnl_usd."""
+    db_path = tmp_path / "state.db"
+    _init_state_db(db_path)
+
+    fake_parser = MagicMock()
+    fake_parser.parse.return_value = MagicMock(
+        symbol="MES",
+        levels=[PlanLevel(price=7272.75, level_type="POINT", source="P1", direction="short_fade")],
+        raw_block_md="", parse_warnings=[], stop_offset_ticks=2, target_r_multiple=2.0,
+    )
+    fake_simulator = MagicMock()
+    fake_simulator.return_value = SimOutcome.untriggered()
+
+    fake_trades_query = MagicMock()
+    fake_trades_query.trades_for_date.return_value = [
+        {"symbol": "MES", "pnl_usd": 50.0},
+        {"symbol": "MES", "pnl_usd": -50.0},
+    ]
+
+    retrospective = PlanRetrospective(
+        plan_parser=fake_parser, trade_simulator=fake_simulator,
+        intraday_bar_fetcher=MagicMock(return_value=[]),
+        trades_query=fake_trades_query,
+        state_db_path=db_path,
+    )
+    rows = retrospective.compose(
+        plans={"MES": "x"}, symbols=["MES"], date_et="2026-05-04",
+        tick_sizes={"MES": 0.25},
+    )
+    assert rows["MES"].open_trades_count == 0
+
+
 def test_no_plan_returns_empty_retrospective(tmp_path):
     """If plans dict is empty (premarket file missing), no rows."""
     db_path = tmp_path / "state.db"
