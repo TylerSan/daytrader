@@ -304,6 +304,8 @@ def test_eod_validator_accepts_complete_report():
 ## 📊 MES
 ## 📊 MNQ
 ## 📊 MGC
+## 🌐 Cross-Asset Narrative
+## 📰 Breaking News
 ## F. 期货结构
 ## D. 情绪面
 ## 今日交易档案
@@ -315,3 +317,63 @@ def test_eod_validator_accepts_complete_report():
 """
     result = v.validate(content, "eod")
     assert result.ok, f"missing: {result.missing}"
+
+
+def test_eod_validator_fails_when_cross_asset_section_missing():
+    """🌐 Cross-Asset Narrative is section #5 in eod.md template (line 11);
+    validator must enforce it. Without this slot, AI silently dropping the
+    section was undetectable.
+
+    Regression: caught 2026-05-05 by code-reviewer agent (I7) before first
+    14:00 PT EOD auto-fire.
+    """
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    # Complete EOD MINUS the 🌐 Cross-Asset section
+    content = """# EOD Daily Report
+## Lock-in Metadata
+## 📊 MES
+## 📊 MNQ
+## 📊 MGC
+## 📰 Breaking News
+## F. 期货结构
+## D. 情绪面
+## 今日交易档案
+## 🔄 Plan Retrospective
+## C. 计划复核
+## B. 市场叙事
+## 📅 Tomorrow Preliminary Plan
+## 数据快照
+"""
+    result = v.validate(content, "eod")
+    assert not result.ok
+    missing_concat = " ".join(result.missing).lower()
+    assert "cross-asset" in missing_concat or "cross_asset" in missing_concat or "🌐" in " ".join(result.missing) or "跨市场" in " ".join(result.missing)
+
+
+def test_eod_validator_fails_when_breaking_news_section_missing():
+    """📰 Breaking News is section #6 in eod.md template (line 12);
+    validator must enforce it. (Same regression as above.)
+    """
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    # Complete EOD MINUS the 📰 Breaking News section
+    content = """# EOD Daily Report
+## Lock-in Metadata
+## 📊 MES
+## 📊 MNQ
+## 📊 MGC
+## 🌐 Cross-Asset Narrative
+## F. 期货结构
+## D. 情绪面
+## 今日交易档案
+## 🔄 Plan Retrospective
+## C. 计划复核
+## B. 市场叙事
+## 📅 Tomorrow Preliminary Plan
+## 数据快照
+"""
+    result = v.validate(content, "eod")
+    assert not result.ok
+    missing_concat = " ".join(result.missing).lower()
+    assert "breaking news" in missing_concat or "新闻" in " ".join(result.missing) or "📰" in " ".join(result.missing)

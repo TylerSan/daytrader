@@ -50,6 +50,12 @@ REQUIRED_SECTIONS: dict[str, list[SectionSpec]] = {
         ["MES", "📊 MES"],
         ["MNQ", "📊 MNQ"],
         ["MGC", "📊 MGC"],
+        # Section #5 in eod.md template (line 11): 🌐 Cross-Asset Narrative
+        # Added 2026-05-05 (I7) — pre-fix the AI could silently omit this
+        # section and the validator wouldn't catch it.
+        ["🌐", "Cross-Asset", "跨市场", "跨资产"],
+        # Section #6 in eod.md template (line 12): 📰 Breaking News (today)
+        ["📰", "Breaking News", "新闻"],
         ["F. 期货结构", "F-MES", "Futures Positioning", "期货结构"],
         ["情绪面", "D. 情绪面", "Sentiment Index", "Sentiment"],
         ["今日交易档案", "Trade Archive", "Today's Trade"],
