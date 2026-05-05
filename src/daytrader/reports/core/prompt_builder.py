@@ -324,6 +324,76 @@ class PromptBuilder:
             {"role": "user", "content": user_text},
         ]
 
+    def build_night_asia(
+        self,
+        cadence_label: str,                  # "night" | "asia"
+        context: ReportContext,
+        bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]],
+        tradable_symbols: list[str],
+        news_items: list[dict[str, Any]],
+        run_timestamp_pt: str,
+        run_timestamp_et: str,
+        futures_data: "FuturesSection | None" = None,
+        sentiment_md: str = "",  # IGNORED — night/asia have no sentiment
+        today_plan_blocks: dict[str, str] | None = None,  # IGNORED
+        today_trades: list[dict[str, Any]] | None = None,  # IGNORED beyond lock-in count
+        retrospective_md: str = "",  # IGNORED
+        tomorrow_preliminary_md: str = "",  # IGNORED
+    ) -> list[dict[str, Any]]:
+        """Build night/asia D-only prompt.
+
+        Per master spec §3.7: night/asia "Removes A, B, C; only multi-TF
+        + news + D frontmatter". Inputs that don't apply (sentiment, plans,
+        trades, retrospective, tomorrow) are accepted but ignored — the
+        BaseCadenceGenerator passes them as kwargs uniformly.
+        """
+        template = load_template("night_asia")
+        contract_section = (
+            context.contract_text
+            if context.contract_text is not None
+            else "Contract.md: not yet filled by user"
+        )
+
+        system_blocks = [
+            {
+                "type": "text",
+                "text": template,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": f"## Contract.md content\n\n{contract_section}",
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": f"## Cadence label\n\n{cadence_label}",
+                "cache_control": {"type": "ephemeral"},
+            },
+        ]
+
+        lock_in_block = self._build_lock_in_block(context)
+        bars_block = self._build_multi_symbol_bars_block(bars_by_symbol_and_tf)
+        futures_block = self._build_futures_section_block(futures_data)
+        news_block = self._build_news_block(news_items)
+
+        user_text = (
+            f"# {cadence_label.title()} D-Archive — "
+            f"{run_timestamp_pt} ({run_timestamp_et})\n\n"
+            f"{lock_in_block}\n\n"
+            f"{bars_block}\n\n"
+            f"{futures_block}\n\n"
+            f"{news_block}\n\n"
+            f"## Note: this is a D-only learning archive. "
+            f"NO A/B/C sections. Populate frontmatter "
+            f"pattern_tags + news_event_tags arrays for future query."
+        )
+
+        return [
+            {"role": "system", "content": system_blocks},
+            {"role": "user", "content": user_text},
+        ]
+
     @staticmethod
     def _build_lock_in_block(ctx: ReportContext) -> str:
         return (

@@ -610,3 +610,71 @@ def test_build_intraday_4h_omits_1h_block_for_intraday_shape_input():
     assert "#### 1H" in full
     # No W placeholder (intraday doesn't fetch W):
     assert "#### 1W" not in full
+
+
+def test_build_night_asia_loads_template_and_returns_messages():
+    """night cadence: 5-section D-only template."""
+    pb = PromptBuilder()
+    msgs = pb.build_night_asia(
+        cadence_label="night",
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf={
+            "MES": {"4H": [], "1H": []},
+            "MNQ": {"4H": [], "1H": []},
+            "MGC": {"4H": [], "1H": []},
+        },
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="19:00 PT",
+        run_timestamp_et="22:00 ET",
+    )
+    assert len(msgs) == 2
+    full = _joined_prompt_text(msgs)
+    assert "Night/Asia D-Archive Report Template" in full
+    assert "night" in full.lower()
+    assert "NO A. section" in full
+
+
+def test_build_night_asia_for_asia_cadence():
+    """asia cadence uses same template, label differs."""
+    pb = PromptBuilder()
+    msgs = pb.build_night_asia(
+        cadence_label="asia",
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf={
+            "MES": {"4H": [], "1H": []},
+            "MNQ": {"4H": [], "1H": []},
+            "MGC": {"4H": [], "1H": []},
+        },
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="23:00 PT",
+        run_timestamp_et="02:00 ET",
+    )
+    full = _joined_prompt_text(msgs)
+    assert "asia" in full.lower()
+
+
+def test_build_night_asia_does_not_emit_d_or_w_tf_block():
+    """night/asia fetch only 4H/1H; D/W must not appear in bars block."""
+    pb = PromptBuilder()
+    bars = {
+        "MES": {"4H": [], "1H": []},
+        "MNQ": {"4H": [], "1H": []},
+        "MGC": {"4H": [], "1H": []},
+    }
+    msgs = pb.build_night_asia(
+        cadence_label="night",
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=bars,
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="19:00 PT",
+        run_timestamp_et="22:00 ET",
+    )
+    full = _joined_prompt_text(msgs)
+    assert "#### 4H" in full
+    assert "#### 1H" in full
+    # No D or W blocks (only 4H + 1H per night/asia spec):
+    assert "#### 1D" not in full
+    assert "#### 1W" not in full
