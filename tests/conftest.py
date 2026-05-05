@@ -4,6 +4,16 @@ import tempfile
 import yaml
 
 
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip tests marked `slow` unless the user explicitly selects them via -m slow."""
+    if config.option.markexpr and "slow" in config.option.markexpr:
+        return  # user opted in — run them
+    skip_slow = pytest.mark.skip(reason="slow test — run with: uv run pytest -m slow")
+    for item in items:
+        if item.get_closest_marker("slow"):
+            item.add_marker(skip_slow)
+
+
 @pytest.fixture
 def tmp_dir():
     with tempfile.TemporaryDirectory() as d:

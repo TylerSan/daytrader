@@ -6,10 +6,12 @@ dist/
 build/
 config/user.yaml
 data/db/*.db
+data/state.db
 data/tick/
 data/imports/
 data/exports/
 data/cache/
+data/locks/
 .pytest_cache/
 
 # Journal subsystem: user-authored contract + setups are not tracked.
@@ -17,3 +19,18 @@ data/cache/
 docs/trading/Contract.md
 docs/trading/setups/*.yaml
 !docs/trading/setups/example_*.yaml
+
+# Secrets — never commit
+config/secrets.yaml
+
+# launchd run logs (rotate manually for now; auto-rotate in future phase)
+data/logs/launchd/*.out
+data/logs/launchd/*.err
+data/logs/launchd/premarket-*.log
+data/logs/launchd/weekly-*.log
+data/logs/launchd/eod-*.log
+!data/logs/launchd/.gitkeep
+
+# Phase 4.5 sentiment parser failure dumps — production runtime forensics
+# (also catches any stragglers from imperfectly-isolated tests).
+data/logs/sentiment-failures/

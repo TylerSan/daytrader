@@ -69,6 +69,26 @@ class JournalConfig(BaseModel):
     obsidian: JournalObsidianConfig = JournalObsidianConfig()
 
 
+class ReportsObsidianConfig(BaseModel):
+    intraday_folder: str = "Daily/Intraday"
+    eod_folder: str = "Daily/EOD"
+    night_folder: str = "Daily/Night"
+
+
+class ReportsIBConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 4002  # IB Gateway live default; paper is 4001
+    client_id: int = 1
+
+
+class ReportsConfig(BaseModel):
+    enabled: bool = False  # off by default until Phase 7 wiring
+    state_db_path: str = "data/state.db"
+    instruments_yaml: str = "config/instruments.yaml"
+    obsidian: ReportsObsidianConfig = ReportsObsidianConfig()
+    ib: ReportsIBConfig = ReportsIBConfig()
+
+
 class DayTraderConfig(BaseModel):
     database: DatabaseConfig = DatabaseConfig()
     notifications: NotificationsConfig = NotificationsConfig()
@@ -76,6 +96,7 @@ class DayTraderConfig(BaseModel):
     premarket: PremarketConfig = PremarketConfig()
     backtest: BacktestConfig = BacktestConfig()
     journal: JournalConfig = JournalConfig()
+    reports: ReportsConfig = ReportsConfig()
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
