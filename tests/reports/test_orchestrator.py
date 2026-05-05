@@ -277,6 +277,10 @@ VALID_EOD_REPORT = (
     "## 📊 MES — Multi-TF\n#### W\nx\n#### D\nx\n#### 4H\nx\n\n"
     "## 📊 MNQ — Multi-TF\n#### W\nx\n#### D\nx\n#### 4H\nx\n\n"
     "## 📊 MGC — Multi-TF\n#### W\nx\n#### D\nx\n#### 4H\nx\n\n"
+    # 🌐 Cross-Asset Narrative + 📰 Breaking News added 2026-05-05 (I7) —
+    # validator now enforces these sections per eod.md template lines 11-12.
+    "## 🌐 Cross-Asset Narrative\nstocks up, dollar flat\n\n"
+    "## 📰 Breaking News\nnone\n\n"
     "## F. 期货结构\n### F-MES\nbullish\n\n"
     "## D. 情绪面 / Sentiment Index\nx\n\n"
     "## 今日交易档案 / Today's Trade Archive\n0 trades\n\n"
