@@ -87,6 +87,116 @@ class PromptBuilder:
             {"role": "user", "content": user_text},
         ]
 
+    def build_eod(
+        self,
+        context: ReportContext,
+        bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]],
+        tradable_symbols: list[str],
+        news_items: list[dict[str, Any]],
+        run_timestamp_pt: str,
+        run_timestamp_et: str,
+        futures_data: "FuturesSection | None" = None,
+        sentiment_md: str = "",
+        today_plan_blocks: dict[str, str] | None = None,
+        retrospective_md: str = "",
+        today_trades_md: str = "",
+        tomorrow_preliminary_md: str = "",
+    ) -> list[dict[str, Any]]:
+        """Build EOD prompt. Section order per spec §6 + brainstorm decisions:
+        Lock-in -> W/D/4H per symbol -> F. -> D. 情绪面 -> 今日交易档案 ->
+        🔄 Plan Retrospective -> C. 计划复核 -> B. 市场叙事 ->
+        📅 Tomorrow Preliminary -> 数据快照. A section explicitly excluded.
+
+        The verbatim grounding inputs (today_plan_blocks, retrospective_md,
+        today_trades_md, tomorrow_preliminary_md) are embedded into the user
+        message so the AI can quote them directly without re-deriving content.
+        """
+        template = load_template("eod")
+        contract_section = (
+            context.contract_text
+            if context.contract_text is not None
+            else "Contract.md: not yet filled by user"
+        )
+
+        system_blocks = [
+            {
+                "type": "text",
+                "text": template,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": f"## Contract.md content\n\n{contract_section}",
+                "cache_control": {"type": "ephemeral"},
+            },
+        ]
+
+        lock_in_block = self._build_lock_in_block(context)
+        bars_block = self._build_multi_symbol_bars_block(bars_by_symbol_and_tf)
+        futures_block = self._build_futures_section_block(futures_data)
+        news_block = self._build_news_block(news_items)
+        tradable_block = (
+            f"## Tradable symbols (count toward 30-trade lock-in)\n"
+            f"{', '.join(tradable_symbols)}\n\n"
+            f"All other symbols are context-only — describe but NO plan."
+        )
+
+        sentiment_block = sentiment_md.strip() if sentiment_md else ""
+        retrospective_block = retrospective_md.strip() if retrospective_md else ""
+        trades_block = today_trades_md.strip() if today_trades_md else ""
+        tomorrow_block = (
+            tomorrow_preliminary_md.strip() if tomorrow_preliminary_md else ""
+        )
+
+        # Verbatim plan blocks for C section
+        plan_blocks = today_plan_blocks or {}
+        plan_section_md = ""
+        if plan_blocks:
+            plan_section_md = "## Today's premarket plan blocks (verbatim — quote in C section)\n\n"
+            plan_section_md += "\n\n".join(
+                f"### Today's premarket C-{sym} (verbatim)\n\n{block}"
+                for sym, block in plan_blocks.items()
+            )
+
+        composed_blocks: list[str] = [futures_block]
+        if sentiment_block:
+            composed_blocks.append(sentiment_block)
+        if trades_block:
+            composed_blocks.append(
+                "## 今日交易档案 / Today's Trade Archive (input grounding)\n\n"
+                + trades_block
+            )
+        if retrospective_block:
+            composed_blocks.append(
+                "## 🔄 Plan Retrospective / 计划复盘 (input grounding — embed verbatim)\n\n"
+                + retrospective_block
+            )
+        if plan_section_md:
+            composed_blocks.append(plan_section_md)
+        if tomorrow_block:
+            composed_blocks.append(
+                "## 📅 Tomorrow Preliminary Plan (input grounding — embed verbatim)\n\n"
+                + tomorrow_block
+            )
+        composed_md = "\n\n".join(composed_blocks)
+
+        user_text = (
+            f"# EOD Daily Report — generation context\n\n"
+            f"**Run time**: {run_timestamp_pt} ({run_timestamp_et})\n\n"
+            f"{lock_in_block}\n\n"
+            f"{tradable_block}\n\n"
+            f"{bars_block}\n\n"
+            f"{composed_md}\n\n"
+            f"{news_block}\n\n"
+            f"Please generate the full EOD report following the system prompt "
+            f"template. Output in Chinese. NO A. section. B. is past-tense only."
+        )
+
+        return [
+            {"role": "system", "content": system_blocks},
+            {"role": "user", "content": user_text},
+        ]
+
     @staticmethod
     def _build_lock_in_block(ctx: ReportContext) -> str:
         return (

@@ -322,3 +322,117 @@ def test_build_premarket_without_sentiment_md_works():
     user_text = msgs[1]["content"]
     # Sentiment block absent
     assert "## D. 情绪面" not in user_text
+
+
+def _joined_prompt_text(msgs: list[dict]) -> str:
+    """Concatenate every text payload across all roles + content blocks."""
+    text = ""
+    for msg in msgs:
+        content = msg["content"]
+        if isinstance(content, list):
+            for block in content:
+                text += block.get("text", "")
+        else:
+            text += content
+    return text
+
+
+def test_build_eod_includes_all_input_blocks():
+    """EOD prompt must embed every grounding input verbatim so AI can quote them."""
+    pb = PromptBuilder()
+    sentiment_md = (
+        "## D. 情绪面 / Sentiment Index\n\n"
+        "### 🌐 Macro Sentiment\n"
+        "**总体综合 +3 / 10**（news +4, social +2）\n"
+    )
+    today_plan_blocks = {
+        "MES": (
+            "**Today's plan**:\n"
+            "- Setup: stacked imbalance reversal\n"
+            "- Direction: long\n"
+            "- Entry: 7199.25\n"
+            "- Stop: 7194.25 (-1R)\n"
+            "- Target: 7209.25 (+2R)\n"
+        ),
+        "MGC": (
+            "**Today's plan**:\n"
+            "- Setup: discretionary read\n"
+            "- Direction: wait\n"
+        ),
+    }
+    retrospective_md = (
+        "## 🔄 Plan Retrospective / 计划复盘\n\n"
+        "### MES per-level table\n"
+        "| Level | Plan | Hit? |\n| --- | --- | --- |\n"
+        "| 7199.25 | long entry | yes |\n"
+    )
+    today_trades_md = (
+        "## 今日交易档案 / Today's Trade Archive\n\n"
+        "| # | Time | Symbol | Side | Entry | Exit | R |\n"
+        "| --- | --- | --- | --- | --- | --- | --- |\n"
+        "| 1 | 09:32 ET | MES | long | 7199.25 | 7209.25 | +2.0R |\n"
+    )
+    tomorrow_preliminary_md = (
+        "## 📅 Tomorrow Preliminary Plan\n\n"
+        "**preliminary — premarket 06:00 PT will finalize**\n\n"
+        "- MES: watch 7280 reaction\n"
+    )
+
+    msgs = pb.build_eod(
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=_empty_bars_by_symbol(),
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="13:30 PT",
+        run_timestamp_et="16:30 ET",
+        futures_data=None,
+        sentiment_md=sentiment_md,
+        today_plan_blocks=today_plan_blocks,
+        retrospective_md=retrospective_md,
+        today_trades_md=today_trades_md,
+        tomorrow_preliminary_md=tomorrow_preliminary_md,
+    )
+
+    full_text = _joined_prompt_text(msgs)
+    # Sentiment input
+    assert "情绪面" in full_text
+    # Verbatim plan block content (specific price)
+    assert "7199.25" in full_text
+    # Retrospective input
+    assert "Plan Retrospective" in full_text or "计划复盘" in full_text
+    # Trade archive input
+    assert "今日交易档案" in full_text
+    # Tomorrow preliminary input
+    assert (
+        "Tomorrow Preliminary" in full_text
+        or "明天初步" in full_text
+        or "7280" in full_text
+    )
+
+    # Structural sanity: messages list has system + user
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "system"
+    assert msgs[1]["role"] == "user"
+
+
+def test_build_eod_omits_A_section_marker():
+    """EOD prompt template must instruct AI to skip the A. (建议 / Recommendation) section."""
+    pb = PromptBuilder()
+    msgs = pb.build_eod(
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=_empty_bars_by_symbol(),
+        tradable_symbols=["MES"],
+        news_items=[],
+        run_timestamp_pt="13:30 PT",
+        run_timestamp_et="16:30 ET",
+    )
+    full_text = _joined_prompt_text(msgs)
+    # Template must signal A section is excluded — accept any of the explicit markers
+    lowered = full_text.lower()
+    assert (
+        "no a." in lowered
+        or "no a section" in lowered
+        or "a section explicitly excluded" in lowered
+        or "a 段" in full_text
+        or "forbidden" in lowered
+    ), "EOD prompt should explicitly mark the A section as excluded"

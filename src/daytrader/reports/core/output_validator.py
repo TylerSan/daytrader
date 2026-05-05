@@ -45,6 +45,20 @@ REQUIRED_SECTIONS: dict[str, list[SectionSpec]] = {
         "A.",
         ["数据快照", "Data snapshot", "Snapshot"],
     ],
+    "eod": [
+        "Lock-in",
+        ["MES", "📊 MES"],
+        ["MNQ", "📊 MNQ"],
+        ["MGC", "📊 MGC"],
+        ["F. 期货结构", "F-MES", "Futures Positioning", "期货结构"],
+        ["情绪面", "D. 情绪面", "Sentiment Index", "Sentiment"],
+        ["今日交易档案", "Trade Archive", "Today's Trade"],
+        ["Plan Retrospective", "🔄 Plan", "计划复盘"],
+        ["C.", "计划复核", "Plan Adherence"],
+        ["B.", "市场叙事", "Narrative"],
+        ["Tomorrow Preliminary", "📅 Tomorrow", "明天初步预案", "明天预案"],
+        ["数据快照", "Data Snapshot", "Snapshot"],
+    ],
 }
 
 

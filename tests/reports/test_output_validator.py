@@ -270,3 +270,48 @@ A.
         # (it might still fail on other slots — we only assert no sentiment missing)
         assert all("情绪" not in m and "Sentiment" not in m for m in result.missing), \
             f"marker {marker!r} should satisfy sentiment slot but didn't: {result.missing}"
+
+
+def test_eod_validator_requires_all_sections():
+    """An EOD report missing 'Plan Retrospective' or '今日交易档案' should fail validation."""
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    content = """# EOD Daily Report
+## Lock-in Metadata
+## 📊 MES
+## 📊 MNQ
+## 📊 MGC
+## F. 期货结构
+## D. 情绪面
+## C. 计划复核
+## B. 市场叙事
+## 数据快照
+"""
+    result = v.validate(content, "eod")
+    assert not result.ok
+    missing_concat = " ".join(result.missing).lower()
+    assert "交易档案" in " ".join(result.missing) or "trade archive" in missing_concat
+    assert "retrospective" in missing_concat or "复盘" in " ".join(result.missing)
+    assert "tomorrow" in missing_concat or "明天" in " ".join(result.missing)
+
+
+def test_eod_validator_accepts_complete_report():
+    """A complete EOD with all required sections passes."""
+    from daytrader.reports.core.output_validator import OutputValidator
+    v = OutputValidator()
+    content = """# EOD Daily Report
+## Lock-in Metadata
+## 📊 MES
+## 📊 MNQ
+## 📊 MGC
+## F. 期货结构
+## D. 情绪面
+## 今日交易档案
+## 🔄 Plan Retrospective
+## C. 计划复核
+## B. 市场叙事
+## 📅 Tomorrow Preliminary Plan
+## 数据快照
+"""
+    result = v.validate(content, "eod")
+    assert result.ok, f"missing: {result.missing}"
