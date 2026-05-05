@@ -50,6 +50,11 @@ class OpenInterest:
 
 _TIMEFRAME_TO_IB_BAR_SIZE: dict[str, str] = {
     "1m": "1 min",
+    # 5m added 2026-05-05 — Plan Retrospective fetches 78 5m bars per
+    # symbol per EOD run for first-touch detection on premarket plan levels.
+    # Without this, orchestrator.py:360 lambda(timeframe="5m") raised
+    # ValueError and crashed the retrospective section silently.
+    "5m": "5 mins",
     "15m": "15 mins",
     "1H": "1 hour",
     "4H": "4 hours",
@@ -89,6 +94,15 @@ def _duration_str(timeframe: str, bars: int) -> str:
     """
     if timeframe == "1m":
         return f"{bars * 60} S"
+    if timeframe == "5m":
+        # 5 min/bar × 60 sec/min × N bars = total seconds.
+        # IB durationStr with "S" unit accepts up to 86400 (1 day);
+        # beyond that we round up to days.
+        secs = bars * 5 * 60
+        if secs < 86400:
+            return f"{secs} S"
+        # Round up: ceil(secs / 86400)
+        return f"{(secs + 86399) // 86400} D"
     if timeframe == "15m":
         return f"{bars * 15} S" if bars * 15 < 86400 else f"{(bars * 15) // 1440 + 1} D"
     if timeframe == "1H":
@@ -148,7 +162,7 @@ class IBClient:
     def get_bars(
         self,
         symbol: str,
-        timeframe: Literal["1m", "15m", "1H", "4H", "1D", "1W", "1M"] = "4H",
+        timeframe: Literal["1m", "5m", "15m", "1H", "4H", "1D", "1W", "1M"] = "4H",
         bars: int = 50,
         end_time: datetime | None = None,
     ) -> list[OHLCV]:

@@ -105,6 +105,61 @@ def test_ibclient_get_bars_unsupported_timeframe_raises():
         client.get_bars(symbol="MES", timeframe="3H", bars=10)
 
 
+def test_ibclient_get_bars_5m_timeframe_supported(monkeypatch):
+    """5m must be a supported timeframe — Plan Retrospective fetches 78 5m
+    bars (one full RTH session) per symbol via the orchestrator's
+    intraday_bar_fetcher lambda. Without this, every EOD report's
+    retrospective section crashes with ValueError before any AI call.
+
+    Regression: caught 2026-05-05 by code-reviewer agent before first 14:00 PT
+    EOD auto-fire. Pre-fix: orchestrator.py:360 lambda(timeframe="5m") →
+    _duration_str raises → PlanRetrospective.compose dies for every level.
+    """
+    fake_ib = MagicMock()
+    fake_ib.isConnected.return_value = True
+
+    fake_bar = MagicMock()
+    fake_bar.date = datetime(2026, 5, 5, 13, 30, tzinfo=timezone.utc)
+    fake_bar.open = fake_bar.high = fake_bar.low = fake_bar.close = 5240.0
+    fake_bar.volume = 1000
+    fake_ib.reqHistoricalData.return_value = [fake_bar]
+
+    monkeypatch.setattr(
+        "daytrader.core.ib_client.IB", MagicMock(return_value=fake_ib)
+    )
+
+    client = IBClient()
+    client.connect()
+    bars = client.get_bars(symbol="MES", timeframe="5m", bars=78)
+
+    assert len(bars) == 1
+
+    call_kwargs = fake_ib.reqHistoricalData.call_args.kwargs
+    assert call_kwargs["barSizeSetting"] == "5 mins"
+    # 78 5m bars = 23400 seconds, well under 86400 (1 day) → seconds form
+    assert call_kwargs["durationStr"] == "23400 S"
+
+
+def test_duration_str_5m_under_one_day_uses_seconds():
+    """5m durations under 1 day use seconds form."""
+    from daytrader.core.ib_client import _duration_str
+    # 78 bars × 5 min × 60 sec = 23400 sec
+    assert _duration_str("5m", 78) == "23400 S"
+    # 1 bar = 5 min = 300 sec
+    assert _duration_str("5m", 1) == "300 S"
+
+
+def test_duration_str_5m_over_one_day_uses_days():
+    """5m durations exceeding 1 day fall back to days form (IB constraint:
+    seconds <= 86400). 288 bars = 1440 min = 1 day exactly → 2 D safety
+    margin."""
+    from daytrader.core.ib_client import _duration_str
+    # 300 bars × 5 min = 1500 min = 90000 sec > 86400 → days form
+    result = _duration_str("5m", 300)
+    assert result.endswith(" D")
+    assert int(result.split()[0]) >= 1
+
+
 def test_ibclient_get_snapshot_returns_current_quote(monkeypatch):
     """get_snapshot() returns current bid/ask/last."""
     fake_ib = MagicMock()
