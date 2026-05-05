@@ -98,6 +98,20 @@ CREATE TABLE IF NOT EXISTS bar_cache (
     volume REAL NOT NULL,
     PRIMARY KEY (instrument, timeframe, bar_time)
 );
+
+CREATE TABLE IF NOT EXISTS plan_retrospective_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    total_levels INTEGER NOT NULL,
+    triggered_count INTEGER NOT NULL,
+    sim_total_r REAL NOT NULL,
+    actual_total_r REAL NOT NULL,
+    gap_r REAL NOT NULL,
+    retrospective_json TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(date, symbol)
+);
 """
 
 
