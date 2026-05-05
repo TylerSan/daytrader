@@ -1,7 +1,8 @@
 """Orchestrator: end-to-end pipeline for one report run.
 
-Phase 2 supports premarket only. Phase 5 will add other report types via
-a per-type dispatch table.
+Phase 2 supports premarket; Phase 5 (T10) adds EOD via :meth:`run_eod`. Other
+cadences (intraday-4h, night, asia, weekly) follow in later phases via the
+same per-type dispatch table.
 """
 
 from __future__ import annotations
@@ -232,6 +233,243 @@ class Orchestrator:
                 except Exception as e:
                     import sys
                     print(f"[orchestrator] telegram push failed: {e}", file=sys.stderr)
+
+            duration = time.perf_counter() - start
+            self.state_db.update_report_status(
+                report_id,
+                status="success",
+                obsidian_path=str(write_result.path),
+                tokens_input=outcome.ai_result.input_tokens,
+                tokens_output=outcome.ai_result.output_tokens,
+                cache_hit_rate=(
+                    outcome.ai_result.cache_read_tokens
+                    / max(outcome.ai_result.input_tokens, 1)
+                ),
+                duration_seconds=duration,
+                estimated_cost_usd=self._estimate_cost(outcome.ai_result),
+            )
+
+        except Exception as exc:
+            self.state_db.update_report_status(
+                report_id,
+                status="failed",
+                failure_reason=f"{type(exc).__name__}: {exc}",
+                duration_seconds=time.perf_counter() - start,
+            )
+            raise
+
+        return PipelineResult(
+            success=True,
+            report_id=report_id,
+            report_path=write_result.path,
+        )
+
+    def run_eod(self, run_at: datetime) -> PipelineResult:
+        """Execute one EOD pipeline run (Phase 5 T10).
+
+        Mirrors :meth:`run_premarket`: idempotency via ``state_db``, pending
+        row insert, multi-symbol fetch + retrospective + AI inside
+        :class:`EODGenerator`, validation handling, Obsidian write,
+        success/failure status update, best-effort Telegram push.
+
+        EOD differs from premarket in that the C section is retrospective
+        (plan-vs-actual review for the day just ended), so no per-instrument
+        plan extraction is performed on the output.
+        """
+        run_at_utc = run_at.astimezone(timezone.utc)
+        date_et = run_at_utc.astimezone(ET).date().isoformat()
+        time_pt_str = run_at_utc.astimezone(PT).strftime("%H:%M")
+        time_et_str = run_at_utc.astimezone(ET).strftime("%H:%M")
+
+        # Idempotency check
+        if self.state_db.already_generated_today("eod", date_et):
+            return PipelineResult(
+                success=True,
+                report_id=None,
+                report_path=None,
+                skipped_idempotent=True,
+            )
+
+        # Insert pending report row
+        report_id = self.state_db.insert_report(
+            report_type="eod",
+            date_et=date_et,
+            time_pt=time_pt_str,
+            time_et=time_et_str,
+            status="pending",
+            created_at=run_at_utc,
+        )
+
+        start = time.perf_counter()
+
+        try:
+            # Load context (contract + journal) — same loader as premarket.
+            loader = ContextLoader(
+                contract_path=self.contract_path,
+                journal_db_path=self.journal_db_path,
+            )
+            context = loader.load()
+
+            # Sentiment with shorter window for EOD (8h covers RTH session).
+            sentiment_section = SentimentSection(
+                symbols=self.symbols,
+                time_window="past 8h",
+            )
+            sentiment_md = ""
+            try:
+                sentiment_result = sentiment_section.collect()
+                sentiment_md = sentiment_section.render(sentiment_result)
+            except Exception as exc:
+                import sys
+                print(
+                    f"[orchestrator] EOD sentiment collect/render failed: {exc}",
+                    file=sys.stderr,
+                )
+
+            # EOD-specific deps.
+            from daytrader.reports.eod.plan_parser import PremarketPlanParser
+            from daytrader.reports.eod.plan_reader import PremarketPlanReader
+            from daytrader.reports.eod.retrospective import PlanRetrospective
+            from daytrader.reports.eod.tomorrow_plan import (
+                TomorrowPreliminaryPlan,
+            )
+            from daytrader.reports.eod.trade_simulator import simulate_level
+            from daytrader.reports.eod.trades_query import TodayTradesQuery
+            from daytrader.reports.futures_data.term_prices import (
+                TermPricesFetcher,
+            )
+            from daytrader.reports.futures_data.underlying_prices import (
+                UnderlyingPriceFetcher,
+            )
+            from daytrader.reports.types.eod import EODGenerator
+
+            plan_reader = PremarketPlanReader(
+                vault_path=self.vault_root,
+                daily_folder=self.daily_folder,
+            )
+            plan_parser = PremarketPlanParser()
+            trades_query = TodayTradesQuery(self.journal_db_path)
+
+            # CRITICAL adapter: PlanRetrospective expects
+            # ``intraday_bar_fetcher(symbol, date_et) -> list[OHLCV]`` but
+            # IBClient.get_bars takes ``(symbol, timeframe, bars)``. 78 5m
+            # bars covers a full RTH session (6.5h × 12 bars/h).
+            retrospective = PlanRetrospective(
+                plan_parser=plan_parser,
+                trade_simulator=simulate_level,
+                intraday_bar_fetcher=lambda sym, d: self.ib_client.get_bars(
+                    symbol=sym, timeframe="5m", bars=78,
+                ),
+                trades_query=trades_query,
+                state_db_path=self.state_db._path,
+            )
+            tomorrow_planner = TomorrowPreliminaryPlan()
+
+            generator = EODGenerator(
+                ib_client=self.ib_client,
+                ai_analyst=self.ai_analyst,
+                symbols=self.symbols,
+                tradable_symbols=self.tradable_symbols,
+                underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
+                term_price_fetcher=TermPricesFetcher(self.ib_client),
+                plan_reader=plan_reader,
+                plan_parser=plan_parser,
+                trades_query=trades_query,
+                retrospective=retrospective,
+                tomorrow_planner=tomorrow_planner,
+            )
+
+            outcome = generator.generate(
+                context=context,
+                date_et=date_et,
+                run_timestamp_pt=f"{time_pt_str} PT",
+                run_timestamp_et=f"{time_et_str} ET",
+                sentiment_md=sentiment_md,
+            )
+
+            if not outcome.validation.ok:
+                self.state_db.update_report_status(
+                    report_id,
+                    status="failed",
+                    failure_reason=(
+                        f"validation missing: {outcome.validation.missing}"
+                    ),
+                    tokens_input=outcome.ai_result.input_tokens,
+                    tokens_output=outcome.ai_result.output_tokens,
+                    duration_seconds=time.perf_counter() - start,
+                )
+                return PipelineResult(
+                    success=False,
+                    report_id=report_id,
+                    report_path=None,
+                    failure_reason=(
+                        f"validation: missing sections "
+                        f"{outcome.validation.missing}"
+                    ),
+                )
+
+            # Write to Obsidian (EOD: Daily/<date>-eod.md).
+            writer = ObsidianWriter(
+                vault_root=self.vault_root,
+                fallback_dir=self.fallback_dir,
+                daily_folder=self.daily_folder,
+            )
+            write_result = writer.write_eod(
+                date_iso=date_et,
+                content=outcome.report_text,
+            )
+
+            # NOTE: EOD's C section is retrospective (plan vs PA review for the
+            # day just ended), not forward-looking — so we do NOT run
+            # PlanExtractor or save per-instrument plan rows. The retrospective
+            # is already persisted to plan_retrospective_daily by
+            # PlanRetrospective.persist() inside EODGenerator.
+
+            # Phase 6 delivery: charts + PDF + Telegram (best-effort).
+            chart_paths: list[Path] = []
+            if self.chart_renderer is not None and outcome.bars_by_symbol_and_tf:
+                try:
+                    artifacts = self.chart_renderer.render_all(
+                        bars_by_symbol_and_tf=outcome.bars_by_symbol_and_tf,
+                        today=date_et,
+                    )
+                    chart_paths = list(artifacts.tf_stack_paths.values())
+                except Exception as e:
+                    import sys
+                    print(
+                        f"[orchestrator] EOD chart render failed: {e}",
+                        file=sys.stderr,
+                    )
+
+            pdf_path: Path | None = None
+            if self.pdf_renderer is not None:
+                try:
+                    pdf_path = self.pdf_renderer.render_to_pdf(
+                        markdown_text=outcome.report_text,
+                        title=f"EOD {date_et}",
+                        filename_stem=f"{date_et}-eod",
+                    )
+                except Exception as e:
+                    import sys
+                    print(
+                        f"[orchestrator] EOD PDF render failed: {e}",
+                        file=sys.stderr,
+                    )
+
+            if self.telegram_pusher is not None:
+                try:
+                    import asyncio
+                    asyncio.run(self.telegram_pusher.push(
+                        text_messages=[outcome.report_text],
+                        chart_paths=chart_paths,
+                        pdf_path=pdf_path,
+                    ))
+                except Exception as e:
+                    import sys
+                    print(
+                        f"[orchestrator] EOD telegram push failed: {e}",
+                        file=sys.stderr,
+                    )
 
             duration = time.perf_counter() - start
             self.state_db.update_report_status(

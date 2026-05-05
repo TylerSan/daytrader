@@ -266,3 +266,91 @@ def test_orchestrator_succeeds_when_pdf_renderer_fails(tmp_path):
     )
     # PDF failed but the report still succeeded
     assert result.success is True
+
+
+# ---------- Phase 5 T10: run_eod tests ----------
+
+
+VALID_EOD_REPORT = (
+    "# EOD Report\n"
+    "## Lock-in Metadata\nstatus\n\n"
+    "## 📊 MES — Multi-TF\n#### W\nx\n#### D\nx\n#### 4H\nx\n\n"
+    "## 📊 MNQ — Multi-TF\n#### W\nx\n#### D\nx\n#### 4H\nx\n\n"
+    "## 📊 MGC — Multi-TF\n#### W\nx\n#### D\nx\n#### 4H\nx\n\n"
+    "## F. 期货结构\n### F-MES\nbullish\n\n"
+    "## D. 情绪面 / Sentiment Index\nx\n\n"
+    "## 今日交易档案 / Today's Trade Archive\n0 trades\n\n"
+    "## 🔄 Plan Retrospective\n(no plan)\n\n"
+    "## C. 计划复核\nx\n\n"
+    "## B. 市场叙事\nnarr\n\n"
+    "## 📅 Tomorrow Preliminary\nplan\n\n"
+    "## 数据快照\nok\n"
+)
+
+
+def _eod_fake_ib():
+    fake_ib = MagicMock()
+    fake_ib.is_healthy.return_value = True
+    fake_ib.get_bars.return_value = [_ohlcv()]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
+    return fake_ib
+
+
+def test_run_eod_idempotent_skips_repeat(tmp_path):
+    """If state_db says EOD already done today, skip without spawning pipeline."""
+    fake_ib = _eod_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_EOD_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    first = orchestrator.run_eod(
+        run_at=datetime(2026, 5, 4, 21, tzinfo=timezone.utc),
+    )
+    assert first.success is True
+
+    second = orchestrator.run_eod(
+        run_at=datetime(2026, 5, 4, 21, tzinfo=timezone.utc),
+    )
+    assert second.skipped_idempotent is True
+    # AI was only called once (second run skipped)
+    assert fake_ai.call.call_count == 1
+
+
+def test_run_eod_writes_eod_md_and_marks_success(tmp_path):
+    """run_eod writes <date>-eod.md and marks the report row 'success'."""
+    fake_ib = _eod_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_EOD_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_eod(
+        run_at=datetime(2026, 5, 4, 21, tzinfo=timezone.utc),
+    )
+    assert result.success is True
+    assert result.report_path is not None
+    assert result.report_path.name == "2026-05-04-eod.md"
+    assert result.report_path.exists()
+
+    report_row = state.get_report_by_id(result.report_id)
+    assert report_row["status"] == "success"
+    assert report_row["report_type"] == "eod"
+
+    # No premarket plan was extracted/persisted from EOD output (retrospective,
+    # not forward-looking).
+    assert state.get_plan_for_date("2026-05-04", "MES") is None
+
+
+def test_run_eod_marks_validation_failure(tmp_path):
+    """If AI output fails section validation, run_eod marks the row failed."""
+    fake_ib = _eod_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text="(too short)")
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_eod(
+        run_at=datetime(2026, 5, 4, 21, tzinfo=timezone.utc),
+    )
+    assert result.success is False
+    assert "validation" in (result.failure_reason or "").lower()
+    report_row = state.get_report_by_id(result.report_id)
+    assert report_row["status"] == "failed"

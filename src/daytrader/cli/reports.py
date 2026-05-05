@@ -1,8 +1,8 @@
 """CLI command group `daytrader reports`.
 
 Phase 1 provided dry-run; Phase 2 added run --type premarket which
-invokes the full pipeline (IB → claude -p → Obsidian).
-Phase 5+ will add other report types via the same dispatch table.
+invokes the full pipeline (IB → claude -p → Obsidian). Phase 5 (T10)
+added --type eod via the same dispatch table.
 """
 
 from __future__ import annotations
@@ -55,7 +55,10 @@ def dry_run(report_type: str) -> None:
     "report_type",
     required=True,
     type=click.Choice(VALID_TYPES, case_sensitive=False),
-    help="Report type to generate (Phase 2: only 'premarket' is implemented).",
+    help=(
+        "Report type to generate (Phase 5: 'premarket' and 'eod' are "
+        "implemented)."
+    ),
 )
 @click.option(
     "--no-telegram",
@@ -73,7 +76,8 @@ def dry_run(report_type: str) -> None:
 def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: bool) -> None:
     """Run a real report end-to-end (touches IB Gateway and Anthropic API).
 
-    Phase 2 implements `--type premarket` only. Other types raise NotImplementedError.
+    Phase 5 implements `--type premarket` and `--type eod`. Other types
+    (intraday-4h, night, asia, weekly) follow in later phases.
     """
     import shutil
     from datetime import datetime, timezone
@@ -85,9 +89,10 @@ def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: boo
     from daytrader.reports.core.ai_analyst import AIAnalyst
     from daytrader.reports.core.orchestrator import Orchestrator
 
-    if report_type != "premarket":
+    if report_type not in ("premarket", "eod"):
         click.echo(
-            f"Phase 2 implements premarket only. {report_type!r} is in a later phase.",
+            f"Phase 5 implements premarket + eod. {report_type!r} is in a "
+            "later phase.",
             err=True,
         )
         ctx.exit(2)
@@ -180,7 +185,14 @@ def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: boo
             pdf_renderer=pdf_renderer,
             telegram_pusher=telegram_pusher,
         )
-        result = orchestrator.run_premarket(run_at=datetime.now(timezone.utc))
+        if report_type == "premarket":
+            result = orchestrator.run_premarket(
+                run_at=datetime.now(timezone.utc)
+            )
+        else:  # report_type == "eod" (validated above)
+            result = orchestrator.run_eod(
+                run_at=datetime.now(timezone.utc)
+            )
 
         if result.skipped_idempotent:
             click.echo("Report already generated today (skipped).")

@@ -96,3 +96,29 @@ def test_reports_run_accepts_no_telegram_no_pdf_flags():
     assert result.exit_code == 0
     assert "--no-telegram" in result.output
     assert "--no-pdf" in result.output
+
+
+def test_reports_run_eod_dispatch_recognized(monkeypatch, tmp_path):
+    """`reports run --type eod` is no longer stub-rejected (Phase 5 T10)."""
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    # Strip PATH so claude CLI lookup fails — we're checking that the dispatch
+    # recognizes 'eod' (i.e., NOT exited with the old "Phase 2 only" message),
+    # and reaches the claude-CLI-missing branch instead.
+    monkeypatch.setenv("PATH", "")
+    result = runner.invoke(cli, ["reports", "run", "--type", "eod"])
+    assert result.exit_code != 0
+    # Old stub message must NOT appear — that means dispatch passed the type
+    # gate and proceeded to a later step.
+    assert "Phase 2 implements premarket only" not in (result.output or "")
+
+
+def test_reports_run_unsupported_type_clearly_errors(monkeypatch, tmp_path):
+    """A still-unimplemented type (e.g. 'night') prints the Phase 5 message."""
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli, ["reports", "run", "--type", "night"])
+    assert result.exit_code != 0
+    output = (result.output or "").lower()
+    # The Phase 5 dispatch message points to a later phase
+    assert "later phase" in output or "phase 5" in output
