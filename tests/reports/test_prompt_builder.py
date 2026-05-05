@@ -436,3 +436,85 @@ def test_build_eod_omits_A_section_marker():
         or "a 段" in full_text
         or "forbidden" in lowered
     ), "EOD prompt should explicitly mark the A section as excluded"
+
+
+def test_build_eod_does_not_emit_placeholder_for_unfetched_tfs():
+    """EOD only fetches 1W/1D/4H. The prompt must NOT contain '#### 1H' or
+    '(no bars available)' when the caller never fed in a 1H key. Otherwise
+    the AI sees 3 noise blocks per EOD report (1H × 3 symbols) and may
+    hallucinate a 1H view or write '1H 数据不可用' into the report.
+
+    Regression: caught 2026-05-05 by code-reviewer agent before first 14:00
+    PT EOD auto-fire. Pre-fix: prompt_builder.py:221 hardcoded the loop
+    over ('1W', '1D', '4H', '1H') regardless of what was in the dict.
+    """
+    pb = PromptBuilder()
+    # EOD-shape input: only 3 TFs per symbol, NOT including 1H
+    bars_eod_shape = {
+        "MES": {
+            "1W": [_ohlcv(datetime(2026, 4, 18, tzinfo=timezone.utc), 5240.0)],
+            "1D": [_ohlcv(datetime(2026, 4, 24, tzinfo=timezone.utc), 5246.0)],
+            "4H": [_ohlcv(datetime(2026, 4, 25, 13, tzinfo=timezone.utc), 5246.5)],
+        },
+        "MGC": {
+            "1W": [],
+            "1D": [],
+            "4H": [],
+        },
+        "MNQ": {
+            "1W": [],
+            "1D": [],
+            "4H": [],
+        },
+    }
+    msgs = pb.build_eod(
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=bars_eod_shape,
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="13:30 PT",
+        run_timestamp_et="16:30 ET",
+    )
+    full_text = _joined_prompt_text(msgs)
+
+    # No 1H section header anywhere in the bars block.
+    # (the template / system instructions may mention 1H, but the
+    # multi-TF bar data block specifically must not have a #### 1H header.)
+    assert "#### 1H" not in full_text, (
+        "EOD prompt must not emit '#### 1H' headers when caller didn't "
+        "fetch 1H bars"
+    )
+
+    # 1W/1D/4H legitimate empty-list placeholders for MGC/MNQ are still OK
+    # — they're explicitly fetched but returned no data, so the placeholder
+    # is informative. We just don't want UNFETCHED TF placeholders.
+    # Sanity: 1W/1D/4H headers ARE present (with bars or as legit empty).
+    assert "#### 1W" in full_text
+    assert "#### 1D" in full_text
+    assert "#### 4H" in full_text
+
+
+def test_build_premarket_still_emits_1H_block_for_premarket_shape_input():
+    """Premarket fetches 1W/1D/4H/1H — the bars block must still render
+    all 4 TFs. This guards against the C3 fix overcorrecting into stripping
+    1H from premarket too."""
+    pb = PromptBuilder()
+    bars_premarket_shape = {
+        "MES": {
+            "1W": [], "1D": [], "4H": [],
+            "1H": [_ohlcv(datetime(2026, 4, 25, 13, tzinfo=timezone.utc), 5246.5)],
+        },
+        "MGC": {tf: [] for tf in ("1W", "1D", "4H", "1H")},
+        "MNQ": {tf: [] for tf in ("1W", "1D", "4H", "1H")},
+    }
+    msgs = pb.build_premarket(
+        context=_basic_ctx(),
+        bars_by_symbol_and_tf=bars_premarket_shape,
+        tradable_symbols=["MES", "MGC"],
+        news_items=[],
+        run_timestamp_pt="06:30 PT",
+        run_timestamp_et="09:30 ET",
+    )
+    full_text = _joined_prompt_text(msgs)
+    assert "#### 1H" in full_text, "Premarket prompt MUST still render 1H block"
+    assert "5246.5" in full_text  # the 1H bar's close should show up

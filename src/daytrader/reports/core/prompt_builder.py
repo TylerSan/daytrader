@@ -209,17 +209,38 @@ class PromptBuilder:
             f"- streak (last 5): {ctx.streak or 'n/a'}\n"
         )
 
+    # Canonical TF rendering order, long → short. Only TFs actually present
+    # in the input dict get rendered — caller controls which TFs to fetch
+    # (premarket fetches 4: 1W/1D/4H/1H; EOD fetches 3: 1W/1D/4H), so we
+    # render exactly what the caller fed us, in canonical order.
+    _CANONICAL_TF_ORDER = ("1W", "1D", "4H", "1H", "15m", "5m", "1m")
+
     @staticmethod
     def _build_multi_symbol_bars_block(
         bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]],
     ) -> str:
-        """Format per-symbol multi-TF bar data."""
+        """Format per-symbol multi-TF bar data.
+
+        Renders only TFs that are KEYS in the per-symbol dict — empty list
+        is still rendered (with "(no bars available)" placeholder, since
+        the caller intended to fetch but got nothing). TFs absent from
+        the dict are silently skipped — the caller never asked for them.
+
+        This avoids 3 noise blocks per EOD report from the previous
+        hardcoded loop ("1W", "1D", "4H", "1H") emitting `#### 1H\\n
+        (no bars available)` for symbols where 1H was never fetched.
+
+        Regression: caught 2026-05-05 by code-reviewer agent before first
+        14:00 PT EOD auto-fire.
+        """
         lines = ["## Multi-TF bar data (per instrument)"]
         for symbol in bars_by_symbol_and_tf:
             lines.append(f"\n### Symbol: {symbol}")
             tfs = bars_by_symbol_and_tf[symbol]
-            for tf in ("1W", "1D", "4H", "1H"):
-                bars = tfs.get(tf, [])
+            for tf in PromptBuilder._CANONICAL_TF_ORDER:
+                if tf not in tfs:
+                    continue  # caller didn't fetch this TF — don't render
+                bars = tfs[tf]
                 if not bars:
                     lines.append(f"\n#### {tf}\n(no bars available)")
                     continue
