@@ -58,3 +58,104 @@ def test_writer_falls_back_when_vault_unwritable(tmp_path, monkeypatch):
     assert result.success is True
     assert result.fallback_used is True
     assert str(fallback) in str(result.path)
+
+
+def test_write_intraday_4h_1_to_vault(tmp_path):
+    """4h-1 writes <date>-0700PT-4H1.md."""
+    from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
+    vault = tmp_path / "vault"
+    fallback = tmp_path / "fallback"
+    daily = vault / "Daily"
+    daily.mkdir(parents=True)
+
+    writer = ObsidianWriter(vault_root=vault, fallback_dir=fallback,
+                            daily_folder="Daily")
+    result = writer.write_intraday_4h(
+        date_iso="2026-05-05",
+        time_label="0700PT-4H1",
+        content="# Intraday 4H Report\nbody\n",
+    )
+    assert result.path.name == "2026-05-05-0700PT-4H1.md"
+    assert result.path.parent == daily
+    assert result.path.read_text().startswith("# Intraday 4H Report")
+
+
+def test_write_intraday_4h_2_to_vault(tmp_path):
+    from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
+    vault = tmp_path / "vault"
+    fallback = tmp_path / "fallback"
+    daily = vault / "Daily"
+    daily.mkdir(parents=True)
+
+    writer = ObsidianWriter(vault_root=vault, fallback_dir=fallback,
+                            daily_folder="Daily")
+    result = writer.write_intraday_4h(
+        date_iso="2026-05-05",
+        time_label="1100PT-4H2",
+        content="# Intraday 4H Report (#2)\n",
+    )
+    assert result.path.name == "2026-05-05-1100PT-4H2.md"
+
+
+def test_write_intraday_4h_falls_back_when_vault_missing(tmp_path):
+    """When vault path doesn't exist, fall back to fallback_dir."""
+    from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
+    vault = tmp_path / "missing-vault"
+    fallback = tmp_path / "fallback"
+    fallback.mkdir()
+
+    writer = ObsidianWriter(vault_root=vault, fallback_dir=fallback,
+                            daily_folder="Daily")
+    result = writer.write_intraday_4h(
+        date_iso="2026-05-05", time_label="0700PT-4H1",
+        content="# fallback test\n",
+    )
+    assert result.path.parent == fallback
+    assert result.path.read_text() == "# fallback test\n"
+
+
+def test_write_night_to_vault(tmp_path):
+    from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
+    vault = tmp_path / "vault"
+    fallback = tmp_path / "fallback"
+    daily = vault / "Daily"
+    daily.mkdir(parents=True)
+
+    writer = ObsidianWriter(vault_root=vault, fallback_dir=fallback,
+                            daily_folder="Daily")
+    result = writer.write_night_asia(
+        date_iso="2026-05-05",
+        cadence="night",
+        content="# Night D-Archive\n",
+    )
+    assert result.path.name == "2026-05-05-1900PT-night.md"
+
+
+def test_write_asia_to_vault(tmp_path):
+    from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
+    vault = tmp_path / "vault"
+    fallback = tmp_path / "fallback"
+    daily = vault / "Daily"
+    daily.mkdir(parents=True)
+
+    writer = ObsidianWriter(vault_root=vault, fallback_dir=fallback,
+                            daily_folder="Daily")
+    result = writer.write_night_asia(
+        date_iso="2026-05-05",
+        cadence="asia",
+        content="# Asia D-Archive\n",
+    )
+    assert result.path.name == "2026-05-05-2300PT-asia.md"
+
+
+def test_write_night_asia_invalid_cadence_raises():
+    from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
+    from pathlib import Path
+    writer = ObsidianWriter(vault_root=Path("/tmp"),
+                            fallback_dir=Path("/tmp"),
+                            daily_folder="Daily")
+    with pytest.raises(ValueError, match="cadence"):
+        writer.write_night_asia(
+            date_iso="2026-05-05", cadence="invalid",
+            content="x",
+        )
