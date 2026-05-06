@@ -7,72 +7,120 @@ The 5 hard gates (sections 3–5 below) are also enforced by
 human-readable companion for screenshot/audit purposes. Per Contract.md §5,
 `entry_via_cli_only: true` — you must still run the CLI from the repo root.
 
+Locked setup: **stacked_imbalance_reversal_at_level** (see
+[setups/stacked_imbalance_reversal.yaml](setups/stacked_imbalance_reversal.yaml)).
+
 ---
 
 ## 0. Trade header
 
-- Date / time (local): `__________`
+- Date / time (local, NY): `__________`
 - Trade # in lock-in: `___ / 30`
-- Symbol: `[ ] MES   [ ] MGC`
+- Symbol: `[ ] MES   [ ] MGC`     (MNQ is reports-only, NOT tradable)
 - Direction: `[ ] long  [ ] short`
-- Setup: `stacked imbalance reversal`
+- Footprint instrument watched: `[ ] ES (for MES)   [ ] GC (for MGC)`
 
 ## 1. Contract status
 
-- [ ] Contract.md `Active: true` and within current lock-in
-- [ ] Today's trade count `<` `max_trades_per_day` (5)
-- [ ] Today's realized R `>` `-daily_loss_limit_r` (−3R)
-- [ ] Not inside a cool-off window (last stop ≥ 30 min ago; not after 2 consecutive stops)
+- [ ] Contract `Active: true` and within current 30-trade lock-in
+- [ ] Today's trade count `<` `max_trades_per_day` (**3**)
+- [ ] Today's realized R `>` `-daily_loss_limit_r` (**−2R**)
+- [ ] Not inside a cool-off window: last stop ≥ 30 min ago
+- [ ] Not at `consecutive_stops_day_end` (2 stops today → no more trades)
+- [ ] If realized today is at −2R already → **stop, no more trades**
 
-## 2. Signal validation (Stacked Imbalance Reversal)
+## 2. Session window (per setup YAML)
 
-- [ ] MotiveWave Level 3 shows **stacked** imbalances (≥ 2 adjacent prints)
-- [ ] Each qualifying print: ratio **≥ 5:1** AND volume **≥ 100**
-- [ ] Reversal location is structural (prior HH/LL, VWAP, HVN/LVN) — not mid-range
-- [ ] Higher-timeframe context does not contradict (not fading a strong trend bar with no exhaustion)
+- [ ] Now is within the instrument's window (NY local):
+  - MES: `09:30 – 11:30`
+  - MGC: `08:20 – 10:30`
+- [ ] No high-impact event today: FOMC, CPI, NFP, opex_friday → if yes, skip
+- [ ] No news within next 15 min
+- [ ] Opening Range NOT already invalidated
 
-## 3. Risk parameters (preset BEFORE entry)
+## 3. Setup validation (mechanical — every box must be ✓)
+
+### Key level (must match one in setup YAML)
+
+- [ ] Level type identified (write below):
+  - POINT: prior_day_high / prior_day_low / prior_day_close / day_vwap /
+    weekly_high / weekly_low / psychological_round / hvn_value_area_high /
+    lvn_value_area_low
+  - ZONE (HTF supply/demand, ≥ 4H TF): htf_demand_zone / htf_supply_zone
+- Level type recorded: `__________`
+- For ZONE only — record:
+  - Zone TF: `__________` (4H / Daily / Weekly / Monthly)
+  - Zone low: `__________`   Zone high: `__________`
+  - Freshness: `[ ] fresh  [ ] tested_once  [ ] multiple_taps`
+- [ ] Price ≥ 0.5 ATR away from level
+
+### Level proximity rule
+
+- [ ] POINT level: entry within **4 ticks** of the point price, OR
+- [ ] ZONE level: entry price **inside [zone_low, zone_high]**
+
+### Stacked imbalance (MotiveWave Level 3 / footprint)
+
+- [ ] **≥ 3 consecutive prices**, same direction
+- [ ] Each qualifying price: ratio **≥ 5:1** (MotiveWave Imbalance 3 = 500%)
+- [ ] Each qualifying price: volume **≥ 100 contracts** (Delta Filter 3)
+- [ ] Direction: I am entering **against** the imbalance (fade aggression)
+- [ ] Timing: entering immediately on the 3rd stacked print (mid-bar OK)
+
+## 4. Risk parameters (preset BEFORE entry)
 
 - [ ] Entry price written: `__________`
-- [ ] Stop price written: `__________` (this is non-negotiable, will not be widened)
-- [ ] Target ≥ 1R written: `__________`
-- [ ] Size computed so risk ≤ 1R = $50
+- [ ] Stop price written: `__________` (will not be widened, full stop)
+- [ ] Stop placement matches YAML rule:
+  - POINT level: 2 ticks beyond the point (opposite side)
+  - ZONE level: 2 ticks beyond the far edge of the zone
+- [ ] Target price written: `__________`
+  - Rule: **closer of (2R, next key level)** — `target = max_2R_or_next_key_level`
+- [ ] R USD computed: `$_____` ≤ **$50** (1R)
   - MES: $5/pt × size × |entry−stop| ≤ $50
   - MGC: $10/pt × size × |entry−stop| ≤ $50
-- [ ] Size ≤ `max_contracts` (2)
+- [ ] Size = **1** (Contract `max_contracts: 1`)
 
-## 4. Order ticket (IBKR)
+## 5. Order ticket (IBKR)
 
-- [ ] Entry + stop + target submitted as a **bracket / OCO** order
-- [ ] Stop is at the broker (not mental, not a "watch" level)
-- [ ] Scale plan: 50% off at T1, trail remainder (per Contract §5)
+- [ ] Entry + stop + target submitted as **bracket / OCO**
+- [ ] Stop is **at the broker** (not mental, not a "watch" level)
+- [ ] Exit structure: **all_at_target** (1 contract closes at one target — no scaling)
 
-## 5. Bans — confirm none are about to be violated
+## 6. Bans — confirm none are about to be violated
 
 - [ ] No averaging down planned if it goes against me
-- [ ] Will not move stop away from entry under any circumstance
-- [ ] Will not exit at < 1R unless structure invalidates (this is not a "scared out" license)
+- [ ] Will not move stop away from entry, ever
+- [ ] Will not exit at < target unless structure invalidates
 - [ ] Not a revenge trade after a recent stop
+- [ ] Setup matches the YAML — if it doesn't, this trade does NOT count toward
+      lock-in AND is a §6 violation (`ban_trade_outside_setup_definition`)
 
-## 6. Environment
+## 7. §9 audit screenshots (mandatory for lock-in count)
 
-- [ ] No high-impact news in the next 15 min (CPI, FOMC, NFP, EIA for MGC)
-- [ ] Liquid session (RTH or active overnight window for the instrument)
+- [ ] **Pre-trade MotiveWave screenshot** showing:
+  - The key level being faded (matches a `key_level_types` entry)
+  - For ZONE levels: TF, zone edges, freshness annotated
+  - The 3+ stacked imbalances (5:1 + ≥100 contracts visible)
+  - Footprint instrument: ES (for MES) or GC (for MGC)
+  - Filter conditions: no event, ATR proximity OK, OR not invalidated
+- Screenshot saved to: `__________`
 
-## 7. Audit artifacts
+## 8. CLI gate — must PASS
 
-- [ ] Screenshot saved: MotiveWave chart with signal annotated
-- [ ] Screenshot saved: IBKR order ticket showing bracket attached
 - [ ] Ran `uv run daytrader journal pre-trade ...` and got `PASSED checklist_id=...`
-- [ ] `checklist_id` recorded: `__________`
+- `checklist_id` recorded: `__________`
+- `trade_id` recorded: `__________`
 
 ---
 
 ## If any box is ✗
 
 Do **not** size down and trade anyway. Skip the trade. Note the reason in the
-journal. Pattern-tracking the skips is part of the audit gate.
+journal. Skips are part of the audit data.
 
 ## After fill
 
-Move to the post-trade journal entry; reference `checklist_id` above.
+Move to the post-trade journal entry; reference `checklist_id` and `trade_id`.
+Capture the §9 post-trade screenshot (entry fill, stop/target fill, close
+timestamp) before running `post-trade`.
