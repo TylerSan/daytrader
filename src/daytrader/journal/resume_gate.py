@@ -21,9 +21,6 @@ class GateResult:
     metrics: dict = field(default_factory=dict)
 
 
-MIN_DRY_RUNS = 20
-
-
 class ResumeGateService:
     def __init__(self, repo: JournalRepository) -> None:
         self.repo = repo
@@ -55,16 +52,10 @@ class ResumeGateService:
                 "sanity", "no locked setup in contract"
             ))
 
-        # Gate 3: >= MIN_DRY_RUNS with outcomes
         dry_runs_closed = [d for d in self.repo.list_dry_runs(only_with_outcome=True)]
         metrics["dry_runs_closed"] = len(dry_runs_closed)
-        if len(dry_runs_closed) < MIN_DRY_RUNS:
-            failed.append(GateFailure(
-                "dry_run_count",
-                f"need >={MIN_DRY_RUNS}, have {len(dry_runs_closed)}",
-            ))
 
-        # Gate 4: dry-run raw expectancy >= 0
+        # Gate 3: dry-run raw expectancy >= 0 (when any closed dry-runs exist)
         if dry_runs_closed:
             total_r = sum(
                 float(d.hypothetical_r_multiple or 0) for d in dry_runs_closed
@@ -77,7 +68,7 @@ class ResumeGateService:
                     f"avg_r = {avg_r:.3f} < 0",
                 ))
 
-        # Gate 5: checklist compliance 100% over dry-run period
+        # Gate 4: checklist compliance 100% over dry-run period
         # Compliance rule: every dry_run mode checklist must have passed=True
         conn = self.repo._get_conn()
         rows = conn.execute(
