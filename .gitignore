@@ -34,3 +34,17 @@ data/logs/launchd/eod-*.log
 # Phase 4.5 sentiment parser failure dumps — production runtime forensics
 # (also catches any stragglers from imperfectly-isolated tests).
 data/logs/sentiment-failures/
+
+# Phase 5.5 launchd logs (2026-05-05)
+data/logs/launchd/intraday-4h-1-*.log
+data/logs/launchd/intraday-4h-2-*.log
+data/logs/launchd/night-*.log
+data/logs/launchd/asia-*.log
+data/logs/launchd/intraday-4h-1.0700pt.out
+data/logs/launchd/intraday-4h-1.0700pt.err
+data/logs/launchd/intraday-4h-2.1100pt.out
+data/logs/launchd/intraday-4h-2.1100pt.err
+data/logs/launchd/night.1900pt.out
+data/logs/launchd/night.1900pt.err
+data/logs/launchd/asia.2300pt.out
+data/logs/launchd/asia.2300pt.err

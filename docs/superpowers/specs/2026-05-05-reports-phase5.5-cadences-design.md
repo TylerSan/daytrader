@@ -1,6 +1,6 @@
 # Reports Phase 5.5 — Multi-Cadence Buildout (intraday-4h, night, asia)
 
-**Status**: Approved (2026-05-05) — pending writing-plans phase
+**Status**: Implemented (2026-05-05) — see commit history for task-by-task progress
 **Targets**: intraday-4h-1, intraday-4h-2, night, asia (4 new cadences)
 **Builds on**: Phase 4.5 sentiment, Phase 5 EOD, Phase 7 v1 launchd
 
@@ -854,6 +854,9 @@ Trace path: 4h-2 11:00 PT writes row → user sees it in 4h-2 report → EOD 14:
 
 - 2026-05-05: Spec drafted, brainstorming complete (Q1-Q5 + 8 design sections + DR-1 through DR-7).
 - Pending: writing-plans.
+- 2026-05-05 (later): Plan executed via subagent-driven-development.
+  All 15 tasks complete; 608+ tests passing; 0 regressions.
+  Premarket / EOD UNCHANGED per regression boundary.
 
 ---
 
