@@ -56,8 +56,8 @@ def dry_run(report_type: str) -> None:
     required=True,
     type=click.Choice(VALID_TYPES, case_sensitive=False),
     help=(
-        "Report type to generate (Phase 5: 'premarket' and 'eod' are "
-        "implemented)."
+        "Report type to generate (Phase 5.5: premarket, eod, "
+        "intraday-4h-1, intraday-4h-2, night, asia)."
     ),
 )
 @click.option(
@@ -89,10 +89,20 @@ def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: boo
     from daytrader.reports.core.ai_analyst import AIAnalyst
     from daytrader.reports.core.orchestrator import Orchestrator
 
-    if report_type not in ("premarket", "eod"):
+    # Phase 5.5 (2026-05-05): now also active for intraday-4h-1, intraday-4h-2,
+    # night, asia. Only weekly remains in "later phase" rejection.
+    ACTIVE_TYPES = (
+        "premarket",
+        "eod",
+        "intraday-4h-1",
+        "intraday-4h-2",
+        "night",
+        "asia",
+    )
+    if report_type not in ACTIVE_TYPES:
         click.echo(
-            f"Phase 5 implements premarket + eod. {report_type!r} is in a "
-            "later phase.",
+            f"Phase 5.5 implements {ACTIVE_TYPES}. {report_type!r} is in a "
+            "later phase (Phase 5.7+ for weekly).",
             err=True,
         )
         ctx.exit(2)
@@ -185,14 +195,17 @@ def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: boo
             pdf_renderer=pdf_renderer,
             telegram_pusher=telegram_pusher,
         )
-        if report_type == "premarket":
-            result = orchestrator.run_premarket(
-                run_at=datetime.now(timezone.utc)
-            )
-        else:  # report_type == "eod" (validated above)
-            result = orchestrator.run_eod(
-                run_at=datetime.now(timezone.utc)
-            )
+        # Phase 5.5: dispatch table for 6 active types
+        now = datetime.now(timezone.utc)
+        DISPATCH = {
+            "premarket": orchestrator.run_premarket,
+            "eod": orchestrator.run_eod,
+            "intraday-4h-1": orchestrator.run_intraday_4h_1,
+            "intraday-4h-2": orchestrator.run_intraday_4h_2,
+            "night": orchestrator.run_night,
+            "asia": orchestrator.run_asia,
+        }
+        result = DISPATCH[report_type](run_at=now)
 
         if result.skipped_idempotent:
             click.echo("Report already generated today (skipped).")
