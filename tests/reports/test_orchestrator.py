@@ -447,3 +447,146 @@ def test_intraday_fetcher_pins_end_time_to_date_et_rth_close(tmp_path):
     assert end_time == expected, (
         f"end_time mismatch: got {end_time!r}, expected {expected!r}"
     )
+
+
+# ---------- Phase 5.5: intraday-4h orchestrator tests ----------
+
+
+VALID_INTRADAY_4H_REPORT = (
+    "# Intraday 4H Report\n"
+    "## 🔒 Lock-in Metadata\nstatus\n\n"
+    "## 📊 MES — Multi-TF\n#### D\nx\n#### 4H\nx\n#### 1H\nx\n"
+    "## 📊 MNQ — Multi-TF\n#### D\nx\n#### 4H\nx\n#### 1H\nx\n"
+    "## 📊 MGC — Multi-TF\n#### D\nx\n#### 4H\nx\n#### 1H\nx\n"
+    "## 🌐 Cross-Asset\nx\n## 📰 Breaking News\nx\n"
+    "## F. 期货结构\nx\n## D. 情绪面\nx\n"
+    "## 今日交易档案\nx\n## 🔄 Plan Retrospective\nx\n"
+    "## C. 计划复核\nx\n## B. 市场叙事\nx\n## A. 建议\nA-3\n## 📑 数据快照\nx\n"
+)
+
+
+def _intraday_fake_ib():
+    fake_ib = MagicMock()
+    fake_ib.is_healthy.return_value = True
+    fake_ib.get_bars.return_value = [_ohlcv()]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
+    return fake_ib
+
+
+def test_run_intraday_4h_1_writes_obsidian_and_marks_success(tmp_path):
+    fake_ib = _intraday_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_INTRADAY_4H_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_intraday_4h_1(
+        run_at=datetime(2026, 5, 5, 14, tzinfo=timezone.utc),
+    )
+    assert result.success is True
+    assert result.report_path is not None
+    assert result.report_path.name == "2026-05-05-0700PT-4H1.md"
+
+    report_row = state.get_report_by_id(result.report_id)
+    assert report_row["status"] == "success"
+    assert report_row["report_type"] == "intraday-4h-1"
+
+
+def test_run_intraday_4h_1_idempotent(tmp_path):
+    fake_ib = _intraday_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_INTRADAY_4H_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    first = orchestrator.run_intraday_4h_1(
+        run_at=datetime(2026, 5, 5, 14, tzinfo=timezone.utc),
+    )
+    assert first.success is True
+    second = orchestrator.run_intraday_4h_1(
+        run_at=datetime(2026, 5, 5, 14, tzinfo=timezone.utc),
+    )
+    assert second.skipped_idempotent is True
+    assert fake_ai.call.call_count == 1
+
+
+def test_run_intraday_4h_2_writes_4h2_filename(tmp_path):
+    fake_ib = _intraday_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_INTRADAY_4H_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_intraday_4h_2(
+        run_at=datetime(2026, 5, 5, 18, tzinfo=timezone.utc),
+    )
+    assert result.success is True
+    assert result.report_path.name == "2026-05-05-1100PT-4H2.md"
+
+
+def test_run_intraday_4h_validation_fail_marks_failed(tmp_path):
+    """If AI output fails section validation, run marks the row failed."""
+    fake_ib = _intraday_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text="(too short)")
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_intraday_4h_1(
+        run_at=datetime(2026, 5, 5, 14, tzinfo=timezone.utc),
+    )
+    assert result.success is False
+    assert "validation" in (result.failure_reason or "").lower()
+
+
+def test_run_intraday_4h_2_pins_retrospective_end_time_to_11_pt(tmp_path):
+    """C2-style guarantee: 4h-2 retrospective fetcher uses end_time = 11:00 PT (14:00 ET)."""
+    fake_ib = _intraday_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_INTRADAY_4H_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+
+    # Use the public factory for 4h-2 fetcher
+    fetcher = orchestrator._make_intraday_fetcher_for_cadence(
+        end_time_et="14:00"
+    )
+    fetcher("MES", "2026-05-05")
+
+    call_kwargs = fake_ib.get_bars.call_args.kwargs
+    end_time = call_kwargs.get("end_time")
+    assert end_time is not None
+    from zoneinfo import ZoneInfo
+    ET = ZoneInfo("America/New_York")
+    expected = datetime(2026, 5, 5, 14, 0, tzinfo=ET)
+    assert end_time == expected
+
+
+def test_run_intraday_4h_persists_warnings_to_state_failures(tmp_path):
+    """When generator returns warnings, orchestrator persists to state.failures."""
+    fake_ib = _intraday_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_INTRADAY_4H_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+
+    from daytrader.reports.types.base import CadenceOutcome
+    from daytrader.reports.core.output_validator import ValidationResult
+
+    fake_outcome = CadenceOutcome(
+        report_text=VALID_INTRADAY_4H_REPORT,
+        ai_result=_ai_result(text=VALID_INTRADAY_4H_REPORT),
+        validation=ValidationResult(ok=True, missing=[]),
+        bars_by_symbol_and_tf={},
+        warnings=("retrospective: ValueError: bad", "news: TimeoutError: net"),
+    )
+
+    with patch(
+        "daytrader.reports.types.intraday_4h.IntradayFourHGenerator"
+    ) as mock_gen_cls:
+        mock_gen_cls.return_value.generate.return_value = fake_outcome
+        result = orchestrator.run_intraday_4h_1(
+            run_at=datetime(2026, 5, 5, 14, tzinfo=timezone.utc),
+        )
+        assert result.success is True
+
+    failures = state.list_unresolved_failures()
+    stages = sorted(f["failure_stage"] for f in failures)
+    assert "retrospective" in stages
+    assert "news" in stages

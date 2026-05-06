@@ -538,6 +538,295 @@ class Orchestrator:
             report_path=write_result.path,
         )
 
+    # --- Phase 5.5 T9: intraday-4h cadences ---
+
+    def _make_intraday_fetcher_for_cadence(self, end_time_et: str):
+        """Build intraday_bar_fetcher closure with end_time pinned to
+        a specific ET time (e.g. '11:00' for 4h-2, '14:00' for EOD).
+
+        Generalizes _make_intraday_fetcher (which was hardcoded to 16:00 ET).
+        Phase 5.5 T9 (2026-05-05).
+        """
+        def _fetch(symbol: str, date_et: str):
+            from datetime import time as _time
+            hh, mm = end_time_et.split(":")
+            date = datetime.strptime(date_et, "%Y-%m-%d").date()
+            end_time = datetime.combine(
+                date, _time(int(hh), int(mm)), tzinfo=ET
+            )
+            return self.ib_client.get_bars(
+                symbol=symbol,
+                timeframe="5m",
+                bars=78,
+                end_time=end_time,
+            )
+        return _fetch
+
+    def run_intraday_4h_1(self, run_at: datetime) -> PipelineResult:
+        """Phase 5.5 T9: 07:00 PT cadence. Lightweight (no retrospective,
+        no sentiment refresh — uses premarket cache for sentiment if
+        available)."""
+        from daytrader.reports.types.intraday_4h import (
+            IntradayFourHConfig,
+        )
+        config = IntradayFourHConfig(
+            cadence_label="intraday-4h-1",
+            do_retrospective=False,
+            sentiment_refresh=False,
+            sentiment_time_window="",
+            news_time_window="past 1h",
+            intraday_end_time_et="10:00",
+        )
+        return self._run_cadence_intraday_4h(config, run_at, "0700PT-4H1")
+
+    def run_intraday_4h_2(self, run_at: datetime) -> PipelineResult:
+        """Phase 5.5 T9: 11:00 PT cadence with full retrospective +
+        sentiment refresh."""
+        from daytrader.reports.types.intraday_4h import (
+            IntradayFourHConfig,
+        )
+        config = IntradayFourHConfig(
+            cadence_label="intraday-4h-2",
+            do_retrospective=True,
+            sentiment_refresh=True,
+            sentiment_time_window="past 5h",
+            news_time_window="past 5h",
+            intraday_end_time_et="14:00",
+        )
+        return self._run_cadence_intraday_4h(config, run_at, "1100PT-4H2")
+
+    def _run_cadence_intraday_4h(
+        self,
+        config,
+        run_at: datetime,
+        time_label: str,
+    ) -> PipelineResult:
+        """Common pipeline for both 4h-1 and 4h-2 cadences.
+        Mirrors run_eod but uses IntradayFourHGenerator + obsidian_writer.write_intraday_4h.
+        """
+        import sys
+
+        start = time.perf_counter()
+
+        run_at_utc = run_at if run_at.tzinfo else run_at.replace(tzinfo=timezone.utc)
+        run_at_utc = run_at_utc.astimezone(timezone.utc)
+        date_et = run_at_utc.astimezone(ET).date().isoformat()
+        time_pt_str = run_at_utc.astimezone(PT).strftime("%H:%M")
+        time_et_str = run_at_utc.astimezone(ET).strftime("%H:%M")
+
+        if self.state_db.already_generated_today(config.cadence_label, date_et):
+            return PipelineResult(
+                success=True, report_id=None, report_path=None,
+                skipped_idempotent=True,
+            )
+
+        report_id = self.state_db.insert_report(
+            report_type=config.cadence_label,
+            date_et=date_et,
+            time_pt=time_pt_str,
+            time_et=time_et_str,
+            status="pending",
+            created_at=run_at_utc,
+        )
+
+        try:
+            loader = ContextLoader(
+                contract_path=self.contract_path,
+                journal_db_path=self.journal_db_path,
+            )
+            context = loader.load()
+
+            # Sentiment: 4h-1 reuses premarket; 4h-2 refreshes inside generator
+            sentiment_md = ""
+            if not config.sentiment_refresh:
+                # Fetch the most recent successful premarket sentiment from
+                # today's premarket report markdown if available.
+                sentiment_md = self._read_today_premarket_sentiment(date_et)
+
+            from daytrader.reports.eod.plan_reader import PremarketPlanReader
+            from daytrader.reports.eod.plan_parser import PremarketPlanParser
+            from daytrader.reports.eod.trade_simulator import simulate_level
+            from daytrader.reports.eod.trades_query import TodayTradesQuery
+            from daytrader.reports.eod.retrospective import PlanRetrospective
+            from daytrader.reports.futures_data.term_prices import TermPricesFetcher
+            from daytrader.reports.futures_data.underlying_prices import (
+                UnderlyingPriceFetcher,
+            )
+            from daytrader.reports.types.intraday_4h import IntradayFourHGenerator
+
+            plan_reader = PremarketPlanReader(
+                vault_path=self.vault_root,
+                daily_folder=self.daily_folder,
+            )
+            plan_parser = PremarketPlanParser()
+            trades_query = TodayTradesQuery(self.journal_db_path)
+
+            retrospective = None
+            if config.do_retrospective:
+                retrospective = PlanRetrospective(
+                    plan_parser=plan_parser,
+                    trade_simulator=simulate_level,
+                    intraday_bar_fetcher=self._make_intraday_fetcher_for_cadence(
+                        end_time_et=config.intraday_end_time_et,
+                    ),
+                    trades_query=trades_query,
+                    state_db_path=self.state_db._path,
+                )
+
+            generator = IntradayFourHGenerator(
+                config=config,
+                ib_client=self.ib_client,
+                ai_analyst=self.ai_analyst,
+                symbols=self.symbols,
+                tradable_symbols=self.tradable_symbols,
+                underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
+                term_price_fetcher=TermPricesFetcher(self.ib_client),
+                plan_reader=plan_reader,
+                plan_parser=plan_parser,
+                trades_query=trades_query,
+                retrospective=retrospective,
+            )
+
+            outcome = generator.generate(
+                context=context,
+                date_et=date_et,
+                run_timestamp_pt=f"{time_pt_str} PT",
+                run_timestamp_et=f"{time_et_str} ET",
+                sentiment_md=sentiment_md,
+            )
+
+            for warning in outcome.warnings:
+                stage, _, reason = warning.partition(": ")
+                self.state_db.log_failure(
+                    report_type=config.cadence_label,
+                    scheduled_at=run_at_utc,
+                    failure_stage=stage or "unknown",
+                    failure_reason=reason or warning,
+                    retry_count=0,
+                )
+
+            if not outcome.validation.ok:
+                self.state_db.update_report_status(
+                    report_id, status="failed",
+                    failure_reason=(
+                        f"validation missing: {outcome.validation.missing}"
+                    ),
+                    tokens_input=outcome.ai_result.input_tokens,
+                    tokens_output=outcome.ai_result.output_tokens,
+                    duration_seconds=time.perf_counter() - start,
+                )
+                return PipelineResult(
+                    success=False, report_id=report_id, report_path=None,
+                    failure_reason=(
+                        f"validation: missing sections "
+                        f"{outcome.validation.missing}"
+                    ),
+                )
+
+            writer = ObsidianWriter(
+                vault_root=self.vault_root,
+                fallback_dir=self.fallback_dir,
+                daily_folder=self.daily_folder,
+            )
+            write_result = writer.write_intraday_4h(
+                date_iso=date_et,
+                time_label=time_label,
+                content=outcome.report_text,
+            )
+
+            # Best-effort delivery: charts, PDF, Telegram
+            chart_paths: list[Path] = []
+            if self.chart_renderer is not None and outcome.bars_by_symbol_and_tf:
+                try:
+                    artifacts = self.chart_renderer.render_all(
+                        bars_by_symbol_and_tf=outcome.bars_by_symbol_and_tf,
+                        today=date_et,
+                    )
+                    chart_paths = list(artifacts.tf_stack_paths.values())
+                except Exception as e:
+                    print(
+                        f"[orchestrator] {config.cadence_label} chart render failed: {e}",
+                        file=sys.stderr,
+                    )
+
+            pdf_path: Path | None = None
+            if self.pdf_renderer is not None:
+                try:
+                    pdf_path = self.pdf_renderer.render_to_pdf(
+                        markdown_text=outcome.report_text,
+                        title=f"{config.cadence_label} {date_et}",
+                        filename_stem=f"{date_et}-{time_label}",
+                    )
+                except Exception as e:
+                    print(
+                        f"[orchestrator] {config.cadence_label} PDF failed: {e}",
+                        file=sys.stderr,
+                    )
+
+            if self.telegram_pusher is not None:
+                try:
+                    import asyncio
+                    asyncio.run(self.telegram_pusher.push(
+                        text_messages=[outcome.report_text],
+                        chart_paths=chart_paths,
+                        pdf_path=pdf_path,
+                    ))
+                except Exception as e:
+                    print(
+                        f"[orchestrator] {config.cadence_label} telegram failed: {e}",
+                        file=sys.stderr,
+                    )
+
+            duration = time.perf_counter() - start
+            self.state_db.update_report_status(
+                report_id, status="success",
+                obsidian_path=str(write_result.path),
+                tokens_input=outcome.ai_result.input_tokens,
+                tokens_output=outcome.ai_result.output_tokens,
+                cache_hit_rate=(
+                    outcome.ai_result.cache_read_tokens
+                    / max(outcome.ai_result.input_tokens, 1)
+                ),
+                duration_seconds=duration,
+                estimated_cost_usd=self._estimate_cost(outcome.ai_result),
+            )
+            return PipelineResult(
+                success=True, report_id=report_id,
+                report_path=write_result.path,
+            )
+
+        except Exception as exc:
+            duration = time.perf_counter() - start
+            self.state_db.update_report_status(
+                report_id, status="failed",
+                failure_reason=f"{type(exc).__name__}: {exc}",
+                duration_seconds=duration,
+            )
+            return PipelineResult(
+                success=False, report_id=report_id, report_path=None,
+                failure_reason=f"{type(exc).__name__}: {exc}",
+            )
+
+    def _read_today_premarket_sentiment(self, date_et: str) -> str:
+        """Read today's premarket report from Obsidian (or fallback) and
+        extract the D. 情绪面 section verbatim. If not found, return ''."""
+        candidates = [
+            self.vault_root / self.daily_folder / f"{date_et}-premarket.md",
+            self.fallback_dir / f"{date_et}-premarket.md",
+        ]
+        for p in candidates:
+            if p.exists():
+                content = p.read_text()
+                # Find D. 情绪面 section (between "## D." and next "## ")
+                import re
+                m = re.search(
+                    r"^## D\.\s*情绪面.*?(?=^## )",
+                    content, re.MULTILINE | re.DOTALL,
+                )
+                if m:
+                    return m.group(0).strip()
+        return ""
+
     @staticmethod
     def _estimate_cost(ai_result: Any) -> float:
         """Rough Opus 4.7 cost estimate, USD.
