@@ -827,6 +827,170 @@ class Orchestrator:
                     return m.group(0).strip()
         return ""
 
+    # --- Phase 5.5 T10: night/asia D-only cadences ---
+
+    def run_night(self, run_at: datetime) -> PipelineResult:
+        """Phase 5.5 T10: 19:00 PT D-only learning archive."""
+        from daytrader.reports.types.night_asia import NightAsiaConfig
+        config = NightAsiaConfig(
+            cadence_label="night",
+            trigger_time_pt="19:00",
+            news_time_window="past 4h",
+        )
+        return self._run_cadence_night_asia(config, run_at)
+
+    def run_asia(self, run_at: datetime) -> PipelineResult:
+        """Phase 5.5 T10: 23:00 PT D-only learning archive."""
+        from daytrader.reports.types.night_asia import NightAsiaConfig
+        config = NightAsiaConfig(
+            cadence_label="asia",
+            trigger_time_pt="23:00",
+            news_time_window="past 4h",
+        )
+        return self._run_cadence_night_asia(config, run_at)
+
+    def _run_cadence_night_asia(
+        self,
+        config,
+        run_at: datetime,
+    ) -> PipelineResult:
+        """Common pipeline for night + asia D-only cadences. NO PDF, NO Telegram.
+
+        Mirrors _run_cadence_intraday_4h but uses NightAsiaGenerator and
+        write_night_asia, and skips PDF/Telegram delivery (D-only is
+        descriptive learning archive, not decision aid).
+        """
+        import sys
+
+        run_at_utc = run_at if run_at.tzinfo else run_at.replace(tzinfo=timezone.utc)
+        run_at_utc = run_at_utc.astimezone(timezone.utc)
+        # night/asia are overnight cadences anchored on PT date (e.g. 23:00 PT
+        # crosses midnight in ET — using ET date would write tomorrow's
+        # filename, breaking the lock-in archive convention).
+        date_pt = run_at_utc.astimezone(PT).date().isoformat()
+        date_et = date_pt
+        time_pt_str = run_at_utc.astimezone(PT).strftime("%H:%M")
+        time_et_str = run_at_utc.astimezone(ET).strftime("%H:%M")
+
+        if self.state_db.already_generated_today(config.cadence_label, date_et):
+            return PipelineResult(
+                success=True, report_id=None, report_path=None,
+                skipped_idempotent=True,
+            )
+
+        report_id = self.state_db.insert_report(
+            report_type=config.cadence_label,
+            date_et=date_et,
+            time_pt=time_pt_str,
+            time_et=time_et_str,
+            status="pending",
+            created_at=run_at_utc,
+        )
+
+        start = time.perf_counter()
+
+        try:
+            loader = ContextLoader(
+                contract_path=self.contract_path,
+                journal_db_path=self.journal_db_path,
+            )
+            context = loader.load()
+
+            from daytrader.reports.futures_data.term_prices import TermPricesFetcher
+            from daytrader.reports.futures_data.underlying_prices import (
+                UnderlyingPriceFetcher,
+            )
+            from daytrader.reports.types.night_asia import NightAsiaGenerator
+
+            generator = NightAsiaGenerator(
+                config=config,
+                ib_client=self.ib_client,
+                ai_analyst=self.ai_analyst,
+                symbols=self.symbols,
+                tradable_symbols=self.tradable_symbols,
+                underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
+                term_price_fetcher=TermPricesFetcher(self.ib_client),
+            )
+
+            outcome = generator.generate(
+                context=context,
+                date_et=date_et,
+                run_timestamp_pt=f"{time_pt_str} PT",
+                run_timestamp_et=f"{time_et_str} ET",
+            )
+
+            for warning in outcome.warnings:
+                stage, _, reason = warning.partition(": ")
+                self.state_db.log_failure(
+                    report_type=config.cadence_label,
+                    scheduled_at=run_at_utc,
+                    failure_stage=stage or "unknown",
+                    failure_reason=reason or warning,
+                    retry_count=0,
+                )
+
+            if not outcome.validation.ok:
+                self.state_db.update_report_status(
+                    report_id, status="failed",
+                    failure_reason=(
+                        f"validation missing: {outcome.validation.missing}"
+                    ),
+                    tokens_input=outcome.ai_result.input_tokens,
+                    tokens_output=outcome.ai_result.output_tokens,
+                    duration_seconds=time.perf_counter() - start,
+                )
+                return PipelineResult(
+                    success=False, report_id=report_id, report_path=None,
+                    failure_reason=(
+                        f"validation: missing sections "
+                        f"{outcome.validation.missing}"
+                    ),
+                )
+
+            writer = ObsidianWriter(
+                vault_root=self.vault_root,
+                fallback_dir=self.fallback_dir,
+                daily_folder=self.daily_folder,
+            )
+            write_result = writer.write_night_asia(
+                date_iso=date_et,
+                cadence=config.cadence_label,
+                content=outcome.report_text,
+            )
+
+            # NO PDF, NO Telegram for night/asia per spec §2.2.
+            # D-only learning archive — descriptive, not pushed to phone.
+
+            duration = time.perf_counter() - start
+            self.state_db.update_report_status(
+                report_id, status="success",
+                obsidian_path=str(write_result.path),
+                tokens_input=outcome.ai_result.input_tokens,
+                tokens_output=outcome.ai_result.output_tokens,
+                cache_hit_rate=(
+                    outcome.ai_result.cache_read_tokens
+                    / max(outcome.ai_result.input_tokens, 1)
+                ),
+                duration_seconds=duration,
+                estimated_cost_usd=self._estimate_cost(outcome.ai_result),
+            )
+            return PipelineResult(
+                success=True, report_id=report_id,
+                report_path=write_result.path,
+            )
+
+        except Exception as exc:
+            duration = time.perf_counter() - start
+            self.state_db.update_report_status(
+                report_id, status="failed",
+                failure_reason=f"{type(exc).__name__}: {exc}",
+                duration_seconds=duration,
+            )
+            return PipelineResult(
+                success=False, report_id=report_id, report_path=None,
+                failure_reason=f"{type(exc).__name__}: {exc}",
+            )
+
     @staticmethod
     def _estimate_cost(ai_result: Any) -> float:
         """Rough Opus 4.7 cost estimate, USD.

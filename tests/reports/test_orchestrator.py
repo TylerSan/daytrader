@@ -590,3 +590,109 @@ def test_run_intraday_4h_persists_warnings_to_state_failures(tmp_path):
     stages = sorted(f["failure_stage"] for f in failures)
     assert "retrospective" in stages
     assert "news" in stages
+
+
+# ---------- Phase 5.5: night/asia orchestrator tests ----------
+
+
+VALID_NIGHT_ASIA_REPORT = (
+    "# D-Archive\n"
+    "## 🔒 Lock-in Metadata\nx\n"
+    "## 📊 MES — Multi-TF\n#### 4H\nx\n#### 1H\nx\n"
+    "## 📊 MNQ — Multi-TF\n#### 4H\nx\n#### 1H\nx\n"
+    "## 📊 MGC — Multi-TF\n#### 4H\nx\n#### 1H\nx\n"
+    "## F. 期货结构\nx\n## 📰 Breaking News\nx\n"
+    "## D. Pattern Archive\npatterns\n## 📑 数据快照\nok\n"
+)
+
+
+def _night_fake_ib():
+    fake_ib = MagicMock()
+    fake_ib.is_healthy.return_value = True
+    fake_ib.get_bars.return_value = [_ohlcv()]
+    fake_ib.get_open_interest.return_value = OpenInterest(100, 90, 10, 0.11)
+    return fake_ib
+
+
+def test_run_night_writes_obsidian_with_night_filename(tmp_path):
+    fake_ib = _night_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_NIGHT_ASIA_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_night(
+        run_at=datetime(2026, 5, 6, 2, tzinfo=timezone.utc),  # 19:00 PT (PDT)
+    )
+    assert result.success is True
+    assert result.report_path.name == "2026-05-05-1900PT-night.md"
+    report_row = state.get_report_by_id(result.report_id)
+    assert report_row["report_type"] == "night"
+
+
+def test_run_asia_writes_obsidian_with_asia_filename(tmp_path):
+    fake_ib = _night_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_NIGHT_ASIA_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_asia(
+        run_at=datetime(2026, 5, 6, 6, tzinfo=timezone.utc),  # 23:00 PT (PDT)
+    )
+    assert result.success is True
+    assert result.report_path.name == "2026-05-05-2300PT-asia.md"
+
+
+def test_run_night_does_not_push_telegram(tmp_path):
+    """night/asia explicitly skip Telegram per spec §2.2."""
+    fake_ib = _night_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_NIGHT_ASIA_REPORT)
+
+    fake_telegram = MagicMock()
+    push_calls = []
+    async def _push(*args, **kwargs):
+        push_calls.append((args, kwargs))
+        return MagicMock(success=True, message_count=1)
+    fake_telegram.push = _push
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    orchestrator.telegram_pusher = fake_telegram
+
+    result = orchestrator.run_night(
+        run_at=datetime(2026, 5, 6, 2, tzinfo=timezone.utc),
+    )
+    assert result.success is True
+    # Telegram pusher.push should NOT have been called for night
+    assert push_calls == [], (
+        f"night cadence must not push Telegram, got {len(push_calls)} pushes"
+    )
+
+
+def test_run_asia_idempotent(tmp_path):
+    fake_ib = _night_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text=VALID_NIGHT_ASIA_REPORT)
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    first = orchestrator.run_asia(
+        run_at=datetime(2026, 5, 6, 6, tzinfo=timezone.utc),
+    )
+    second = orchestrator.run_asia(
+        run_at=datetime(2026, 5, 6, 6, tzinfo=timezone.utc),
+    )
+    assert first.success is True
+    assert second.skipped_idempotent is True
+    assert fake_ai.call.call_count == 1
+
+
+def test_run_night_validation_fail_marks_failed(tmp_path):
+    fake_ib = _night_fake_ib()
+    fake_ai = MagicMock()
+    fake_ai.call.return_value = _ai_result(text="(too short)")
+
+    state, orchestrator = _make_orchestrator(tmp_path, fake_ib, fake_ai)
+    result = orchestrator.run_night(
+        run_at=datetime(2026, 5, 6, 2, tzinfo=timezone.utc),
+    )
+    assert result.success is False
+    assert "validation" in (result.failure_reason or "").lower()
