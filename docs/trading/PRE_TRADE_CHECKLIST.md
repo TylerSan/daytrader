@@ -3,9 +3,9 @@
 Fill this **before** clicking buy/sell. If any item is ✗, do not trade.
 
 The 5 hard gates (sections 3–5 below) are also enforced by
-`daytrader journal pre-trade` — this Markdown form is the human-readable
-companion for screenshot/audit purposes. Per Contract.md §5,
-`entry_via_cli_only: true` — you must still run the CLI.
+`uv run daytrader journal pre-trade` — this Markdown form is the
+human-readable companion for screenshot/audit purposes. Per Contract.md §5,
+`entry_via_cli_only: true` — you must still run the CLI from the repo root.
 
 ---
 
@@ -63,7 +63,7 @@ companion for screenshot/audit purposes. Per Contract.md §5,
 
 - [ ] Screenshot saved: MotiveWave chart with signal annotated
 - [ ] Screenshot saved: IBKR order ticket showing bracket attached
-- [ ] Ran `daytrader journal pre-trade ...` and got `PASSED checklist_id=...`
+- [ ] Ran `uv run daytrader journal pre-trade ...` and got `PASSED checklist_id=...`
 - [ ] `checklist_id` recorded: `__________`
 
 ---

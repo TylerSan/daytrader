@@ -1,7 +1,8 @@
 # Post-Trade Journal
 
 Fill **immediately after exit**, before the next setup tempts you. One entry
-per closed trade. The CLI counterpart is `daytrader journal post-trade`.
+per closed trade. The CLI counterpart is `uv run daytrader journal post-trade`
+(run from repo root).
 
 ---
 
@@ -31,7 +32,7 @@ Tick "yes" only if the answer is honestly yes.
 - [ ] Did not cut a winner before 1R unless structure actually invalidated
 - [ ] Not a revenge trade after a recent stop
 - [ ] Setup was a true stacked imbalance reversal (5:1 + 100 vol, structural location)
-- [ ] CLI `pre-trade` was run and `PASSED` before entry
+- [ ] CLI `uv run daytrader journal pre-trade` was run and `PASSED` before entry
 - [ ] Screenshots saved (signal + order ticket + exit)
 
 **Any unticked box = a discipline break.** Note which and why below — the

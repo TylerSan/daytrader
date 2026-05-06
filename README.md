@@ -9,6 +9,11 @@
 
 ## CLI (enforces the same gates)
 
-- `daytrader journal pre-trade ...` — must `PASSED` before entry
-- `daytrader journal post-trade <trade_id> --exit-price ... --notes "..."`
-- `daytrader journal circuit status` — today's R, trade count, lock state
+Run from repo root. The `daytrader` entry point is not on `$PATH` — invoke
+via `uv run`:
+
+- `uv run daytrader journal pre-trade ...` — must `PASSED` before entry
+- `uv run daytrader journal post-trade <trade_id> --exit-price ... --notes "..."`
+- `uv run daytrader journal circuit status` — today's R, trade count, lock state
+
+Optional: `alias dt='uv run daytrader'` in your shell rc, then `dt journal circuit status`.
