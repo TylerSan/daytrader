@@ -34,28 +34,10 @@ class ResumeGateService:
         if contract is None:
             failed.append(GateFailure("contract", "no active contract"))
 
-        # Gate 2: at least 1 passed setup_verdict for the locked setup
-        if contract and contract.locked_setup_name:
-            verdicts = self.repo.list_setup_verdicts(
-                setup_name=contract.locked_setup_name
-            )
-            passed_verdicts = [v for v in verdicts if v.passed]
-            metrics["passed_verdicts"] = len(passed_verdicts)
-            if not passed_verdicts:
-                failed.append(GateFailure(
-                    "sanity",
-                    f"no passing sanity-floor verdict for "
-                    f"{contract.locked_setup_name}",
-                ))
-        else:
-            failed.append(GateFailure(
-                "sanity", "no locked setup in contract"
-            ))
-
         dry_runs_closed = [d for d in self.repo.list_dry_runs(only_with_outcome=True)]
         metrics["dry_runs_closed"] = len(dry_runs_closed)
 
-        # Gate 3: dry-run raw expectancy >= 0 (when any closed dry-runs exist)
+        # Gate 2: dry-run raw expectancy >= 0 (when any closed dry-runs exist)
         if dry_runs_closed:
             total_r = sum(
                 float(d.hypothetical_r_multiple or 0) for d in dry_runs_closed
@@ -68,7 +50,7 @@ class ResumeGateService:
                     f"avg_r = {avg_r:.3f} < 0",
                 ))
 
-        # Gate 4: checklist compliance 100% over dry-run period
+        # Gate 3: checklist compliance 100% over dry-run period
         # Compliance rule: every dry_run mode checklist must have passed=True
         conn = self.repo._get_conn()
         rows = conn.execute(
