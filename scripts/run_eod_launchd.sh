@@ -44,6 +44,8 @@ if ! uv run python scripts/preflight_check.py --silent; then
     echo "[run_eod_launchd] PREFLIGHT FAILED — send notification and exit"
     # Best-effort macOS notification
     osascript -e 'display notification "EOD preflight failed at 14:00 PT — TWS / claude / config issue" with title "DayTrader EOD" sound name "Submarine"' 2>/dev/null || true
+    # Telegram notification (preflight-failure escalation, 2026-05-07)
+    uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "eod" "14:00 PT" 2>/dev/null || true
     exit 0
 fi
 

@@ -27,6 +27,8 @@ echo "[run_intraday_4h_1_launchd] PWD=$PROJECT_ROOT"
 if ! uv run python scripts/preflight_check.py --silent; then
     echo "[run_intraday_4h_1_launchd] PREFLIGHT FAILED — notify and exit 0"
     osascript -e 'display notification "intraday-4h-1 preflight failed at 07:00 PT" with title "DayTrader 4H-1" sound name "Submarine"' 2>/dev/null || true
+    # Telegram notification (preflight-failure escalation, 2026-05-07)
+    uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "intraday-4h-1" "07:00 PT" 2>/dev/null || true
     exit 0
 fi
 

@@ -51,6 +51,8 @@ echo "[run_weekly_launchd] PWD=$PROJECT_ROOT"
 if ! uv run python scripts/preflight_check.py --silent; then
     echo "[run_weekly_launchd] PREFLIGHT FAILED — send notification and exit"
     osascript -e 'display notification "Weekly preflight failed at Sunday 14:00 PT — TWS / claude / config issue" with title "DayTrader Weekly" sound name "Submarine"' 2>/dev/null || true
+    # Telegram notification (preflight-failure escalation, 2026-05-07)
+    uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "weekly" "Sunday 14:00 PT" 2>/dev/null || true
     exit 0
 fi
 

@@ -46,6 +46,8 @@ if ! uv run python scripts/preflight_check.py --silent; then
     echo "[run_premarket_launchd] PREFLIGHT FAILED — send notification and exit"
     # Best-effort macOS notification
     osascript -e 'display notification "Preflight check failed at 06:00 PT — TWS / claude / config issue" with title "DayTrader" sound name "Submarine"' 2>/dev/null || true
+    # Telegram notification (preflight-failure escalation, 2026-05-07)
+    uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "premarket" "06:00 PT" 2>/dev/null || true
     exit 0
 fi
 

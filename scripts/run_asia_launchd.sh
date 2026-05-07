@@ -27,6 +27,8 @@ echo "[run_asia_launchd] PWD=$PROJECT_ROOT"
 if ! uv run python scripts/preflight_check.py --silent; then
     echo "[run_asia_launchd] PREFLIGHT FAILED — notify and exit 0"
     osascript -e 'display notification "asia preflight failed at 23:00 PT" with title "DayTrader Asia" sound name "Submarine"' 2>/dev/null || true
+    # Telegram notification (preflight-failure escalation, 2026-05-07)
+    uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "asia" "23:00 PT" 2>/dev/null || true
     exit 0
 fi
 
