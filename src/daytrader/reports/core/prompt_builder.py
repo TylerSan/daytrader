@@ -386,7 +386,10 @@ class PromptBuilder:
             f"{news_block}\n\n"
             f"## Note: this is a D-only learning archive. "
             f"NO A/B/C sections. Populate frontmatter "
-            f"pattern_tags + news_event_tags arrays for future query."
+            f"pattern_tags + news_event_tags arrays for future query.\n\n"
+            f"Output in Chinese (same style as premarket/EOD reports). "
+            f"Section headers may use English/emoji as anchors but body "
+            f"content must be Chinese."
         )
 
         return [

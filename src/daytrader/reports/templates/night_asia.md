@@ -25,7 +25,7 @@ You are generating a D-only learning archive report. The US RTH session has clos
 
 ## Output Format Notes
 
-- Use Chinese where input data is Chinese; mixed Chinese/English is acceptable.
+- **Output MUST be in Chinese** (same style as premarket/EOD reports). Section headers and emoji may stay English (📊 Multi-TF, F. 期货结构, etc.) as anchors, but body content under each section must be Chinese. AI defaulting to English here would break consistency with the rest of the report family.
 - Total length 3.5-5K characters.
 - No preamble; start directly with the # heading.
 - Frontmatter at top (YAML) with pattern_tags + news_event_tags arrays — these enable future programmatic query like "all bullish_engulf at support_test in last 30 days".
