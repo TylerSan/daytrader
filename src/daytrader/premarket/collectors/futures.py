@@ -56,6 +56,31 @@ class FuturesCollector(Collector):
                     "open": info.get("regularMarketOpen"),
                 }
 
+                # Fetch real past 8 weeks of weekly OHLCV — used by the
+                # weekly AI prompt to ground "上周回顾" in actual historical
+                # bars rather than reverse-engineering from one day's snapshot.
+                # period=3mo gives ~12 weekly bars; we keep the last 8.
+                try:
+                    weekly = ticker.history(period="3mo", interval="1wk")
+                    if not weekly.empty:
+                        recent = weekly.tail(8)
+                        entry["weekly_bars_8w"] = [
+                            {
+                                "week_end": idx.strftime("%Y-%m-%d"),
+                                "open": round(float(row["Open"]), 2),
+                                "high": round(float(row["High"]), 2),
+                                "low": round(float(row["Low"]), 2),
+                                "close": round(float(row["Close"]), 2),
+                                "volume": float(row["Volume"]),
+                            }
+                            for idx, row in recent.iterrows()
+                        ]
+                except Exception:
+                    # Per-symbol weekly fetch is best-effort; missing weekly
+                    # bars degrade the AI prompt to the old single-snapshot
+                    # behavior but don't fail the run.
+                    entry["weekly_bars_8w"] = []
+
                 # Fetch intraday data for overnight session context
                 # 1m interval, last 1 day captures globex session
                 hist = ticker.history(period="1d", interval="1m")

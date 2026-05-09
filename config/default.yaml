@@ -37,3 +37,16 @@ journal:
     trades_folder: DayTrader/Trades
     dry_runs_folder: DayTrader/DryRuns
     checklists_folder: DayTrader/Daily
+
+reports:
+  enabled: false
+  state_db_path: data/state.db
+  instruments_yaml: config/instruments.yaml
+  obsidian:
+    intraday_folder: Daily/Intraday
+    eod_folder: Daily/EOD
+    night_folder: Daily/Night
+  ib:
+    host: 127.0.0.1
+    port: 4002
+    client_id: 1
