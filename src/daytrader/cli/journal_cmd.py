@@ -344,3 +344,36 @@ def sanity_run(setup_file: Path, symbol: tuple[str, ...], window_days: int):
             )
         except Exception as e:
             click.echo(f"[ERROR] {setup.name}/{sym}: {e}", err=True)
+
+
+@click.command("review-history")
+@click.argument(
+    "paths", nargs=-1, required=True,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option("--r", "r_unit", default=50.0, type=float,
+              help="Contract R in USD for R-multiple framing (default 50)")
+@click.option("--cad", "cad_usd", default=0.73, type=float,
+              help="Flat CAD->USD rate for magnitude framing (default 0.73)")
+@click.option("--out", "out_path", default=None,
+              type=click.Path(path_type=Path),
+              help="Also write a Markdown data report to this path")
+def review_history_cmd(
+    paths: tuple[Path, ...], r_unit: float, cad_usd: float,
+    out_path: Path | None,
+) -> None:
+    """Behavioral review of IBKR Activity-Statement CSV export(s).
+
+    Read-only. Accepts statement files and/or directories. Behavioral
+    diagnosis + Contract validation only -- it does NOT fit or suggest a
+    strategy. Keep private statement CSVs under git-ignored data/imports/.
+    """
+    from daytrader.journal.review_history import build_report, load_statements
+
+    fills, anchors = load_statements(list(paths), cad_usd=cad_usd)
+    report = build_report(fills, anchors, cad_usd=cad_usd, r_unit=r_unit)
+    click.echo(report.text())
+    if out_path is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(report.markdown())
+        click.echo(f"Markdown data report written to: {out_path}")
