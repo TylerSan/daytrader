@@ -1,0 +1,6 @@
+# Reports branch: only track data/exports
+*
+!data/
+!data/exports/
+!data/exports/**
+!.gitignore
