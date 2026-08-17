@@ -1,0 +1,471 @@
+[05:30:04] === DayTrader Pre-Market Report ===
+[05:30:04] Running full pre-market analysis with AI...
+Running full analysis with AI (this may take 1-3 minutes)...
+---
+date: 2026-04-14
+generated: 2026-04-14T05:32:42
+type: premarket
+tags: [trading, premarket, daily]
+---
+
+# 盘前分析报告 — 2026-04-14
+*生成时间: 05:32:42 UTC*
+
+---
+## 数据速览
+
+![overview](images/premarket-2026-04-14-overview.webp)
+![sectors](images/premarket-2026-04-14-sectors.webp)
+![movers](images/premarket-2026-04-14-movers.webp)
+![levels](images/premarket-2026-04-14-levels.webp)
+
+---
+## 一、宏观环境
+
+> [!info]- 详细数据：指数期货 & VIX
+> ### 1.1 指数期货 & VIX
+> | 品种 | 现价 | 涨跌幅 | 前收 | 日高 | 日低 |
+> |------|------|--------|------|------|------|
+> | ES=F | 6942.25 | +0.28% | 6922.75 | 6945.25 | 6920.25 |
+> | NQ=F | 25681.75 | +0.54% | 25543.5 | 25698.0 | 25560.0 |
+> | YM=F | 48451.0 | +0.05% | 48425.0 | 48534.0 | 48344.0 |
+> | GC=F | 4791.5 | +0.51% | 4767.4 | 4820.4 | 4767.6 |
+> | ^VIX | 18.13 | -5.18% | 19.12 | 18.76 | 18.07 |
+
+> [!info]- 详细数据：隔夜走势
+> ### 1.2 隔夜走势（Globex）
+> | 品种 | 隔夜高 | 隔夜低 | 区间 | 亚洲高 | 亚洲低 | 欧洲高 | 欧洲低 |
+> |------|--------|--------|------|--------|--------|--------|--------|
+> | ES=F | 6945.25 | 6920.25 | 25.0 | 6926.0 | 6921.5 | 6945.25 | 6920.25 |
+> | NQ=F | 25698.0 | 25564.5 | 133.5 | 25598.25 | 25571.5 | 25698.0 | 25564.5 |
+> | YM=F | 48534.0 | 48344.0 | 190.0 | 48430.0 | 48394.0 | 48534.0 | 48344.0 |
+> | GC=F | 4820.4 | 4773.3 | 47.1 | 4799.2 | 4780.0 | 4820.4 | 4773.3 |
+> | ^VIX | 18.76 | 18.07 | 0.69 | — | — | 18.76 | 18.07 |
+
+> [!info]- 详细数据：板块强弱
+> ### 1.3 板块强弱
+> | ETF | 板块 | 涨跌幅 |
+> |-----|------|--------|
+> | XLK | Technology | +2.10% |
+> | XLF | Financials | +1.75% |
+> | XLY | Consumer Discretionary | +0.91% |
+> | XLC | Communication | +0.76% |
+> | XLI | Industrials | +0.71% |
+> | XLRE | Real Estate | +0.47% |
+> | XLV | Healthcare | +0.45% |
+> | XLB | Materials | +0.44% |
+> | XLE | Energy | +0.30% |
+> | XLP | Consumer Staples | -1.00% |
+> | XLU | Utilities | -1.21% |
+
+---
+## 二、消息面
+
+- **AI交易再次引领股市：每日图表** — *Yahoo Finance*
+  > AI trade is leading the stock market again: Chart of the Day
+- **今日股市：道指在关键通胀数据公布前震荡；Bloom因甲骨文消息大涨（实时报道）** — *Investor's Business Daily*
+  > Stock Market Today: Dow Wavers Ahead Of Key Inflation Data; Bloom Soars On This Oracle News (Live Coverage)
+- **ETF资金流向工具：追踪ETF、发行商及资产类别资金流向** — *etf.com*
+  > ETF Fund Flows Tool: Track ETF, Issuer  Asset Class Flows
+- **油价100美元：苏茜·欧曼称恐慌性抛售是最大的投资错误** — *24/7 Wall St.*
+  > $100 Oil: Why Suze Orman Says Panic-Selling Now is the Ultimate Investing Mistake
+- **纳斯达克今日下跌的最大推手：伊朗封锁令科技股承压** — *24/7 Wall St.*
+  > The Biggest Things Driving the Nasdaq Lower Today: Iran Blockade Rattles Tech
+- **亚马逊股价领涨"七巨头"反弹——但涨势触及天花板：每日图表** — *Yahoo Finance*
+  > Amazon stock is leading the 'Magnificent 7' rebound — but the rally is hitting a ceiling: Chart of the Day
+- **为何数百万投资者买错了纳斯达克ETF** — *24/7 Wall St.*
+  > Why Millions of Investors Are Buying the Wrong NASDAQ ETF
+- **交易所交易基金上涨，美股午盘后涨跌互现** — *MT Newswires*
+  > Exchange-Traded Funds Rise, US Equities Mixed After Midday
+- **VIX指数急剧反转，和平谈判破裂后重新指向30** — *24/7 Wall St.*
+  > The VIX Sharply Reverses and Points Back Towards 30 After Failed Peace Negotiations
+- **华尔街恐慌指数上升，霍尔木兹海峡封锁令市场紧张** — *Barrons.com*
+  > Wall Street Fear Index Rises as Hormuz Blockade Puts Markets on Edge
+- **华尔街恐慌指标闪现罕见信号，标普500或在数月内升至7400点** — *MarketWatch*
+  > Wall Street’s fear gauge just flashed an unusual signal that could carry the S&P 500 to 7,400 within months
+- **华尔街恐慌指数在通胀报告公布前释放平静信号** — *Barrons.com*
+  > Wall Street Fear Index Signals Calm Ahead of Inflation Report
+- **黄金ETF或仍有上涨空间：切勿掉以轻心** — *Zacks*
+  > Gold ETFs May Still Have More to Offer: Don't Look Away Yet
+- **今日金银价格（4月14日周二）：伊朗和平谈判重启希望提振价格走强** — *Yahoo Personal Finance*
+  > Gold and silver prices today, Tuesday, April 14: Prices show some strength on hopes of renewed peace talks with Iran
+- **白银vs黄金：过去50年哪种金属为投资者赚了更多钱？** — *Yahoo Personal Finance*
+  > Silver vs. gold: Which metal made investors more money in the last 50 years?
+- **Integra Resources美股盘前涨1.1%，公布内华达州Florida Canyon矿钻探亮点** — *MT Newswires*
+  > Integra Resources Up 1.1% In US Premarket As Provides Drill Highlights from Florida Canyon Mine in Nevada
+- **Nova Minerals在阿拉斯加Estelle项目Korbel附近发现新金矿异常区** — *Proactive*
+  > Nova Minerals defines new gold anomaly near Korbel at Estelle project in Alaska
+- **Serabi Gold英股交易中涨4%，发布2026年一季度产量及运营亮点** — *MT Newswires*
+  > Serabi Gold Up 4% In UK Trade After Reporting Q1 2026 Production & Operational Highlights
+- **富时100与美股跳水，伊朗战争忧虑令油价剧烈波动** — *Yahoo Finance UK*
+  > FTSE 100 and US stocks dive and oil swings amid Iran war jitters
+- **富时100与美股反弹，美联储会议及伊朗冲突受关注** — *Yahoo Finance UK*
+  > FTSE 100 and US stocks rally with Fed meeting and Iran conflict in view
+
+---
+## 三、盘前异动
+
+> [!info]- 详细数据：盘前异动
+> | 代码 | 名称 | 现价 | 缺口 | 量比 |
+> |------|------|------|------|------|
+> | MARA | MARA Holdings, Inc. | 10.57 | +10.80% | 1.14x |
+> | SOFI | SoFi Technologies, Inc. | 17.42 | +7.39% | 1.0x |
+> | COIN | Coinbase Global, Inc. | 179.09 | +6.70% | 0.79x |
+> | MSFT | Microsoft Corporation | 389.44 | +5.01% | 1.13x |
+> | PLTR | Palantir Technologies Inc. | 134.35 | +4.87% | 1.2x |
+> | RIVN | Rivian Automotive, Inc. | 16.1 | +4.34% | 0.98x |
+> | TSLA | Tesla, Inc. | 358.75 | +2.79% | 0.77x |
+> | GOOGL | Alphabet Inc. | 325.11 | +2.47% | 0.69x |
+> | META | Meta Platforms, Inc. | 642.37 | +1.99% | 0.51x |
+> | AMZN | Amazon.com, Inc. | 243.09 | +1.98% | 0.88x |
+
+---
+## 四、关键价位
+
+> [!info]- 详细数据：SPY 关键价位
+> ### SPY
+> | 价位类型 | 价格 |
+> |----------|------|
+> | Prior Day High | 686.295 |
+> | Prior Day Low | 676.58 |
+> | Prior Day Close | 679.46 |
+> | Premarket Price | 688.75 |
+> | Approx Vwap 5D | 675.19 |
+> | Weekly High | 686.3 |
+> | Weekly Low | 651.06 |
+
+> [!info]- 详细数据：QQQ 关键价位
+> ### QQQ
+> | 价位类型 | 价格 |
+> |----------|------|
+> | Prior Day High | 617.96 |
+> | Prior Day Low | 608.11 |
+> | Prior Day Close | 611.07 |
+> | Premarket Price | 621.3825 |
+> | Approx Vwap 5D | 605.27 |
+> | Weekly High | 626.74 |
+> | Weekly Low | 578.4 |
+
+> [!info]- 详细数据：IWM 关键价位
+> ### IWM
+> | 价位类型 | 价格 |
+> |----------|------|
+> | Prior Day High | 265.36 |
+> | Prior Day Low | 260.03 |
+> | Prior Day Close | 261.3 |
+> | Premarket Price | 267.58 |
+> | Approx Vwap 5D | 259.85 |
+> | Weekly High | 265.36 |
+> | Weekly Low | 249.52 |
+
+---
+## 五、AI 技术分析 & 操盘建议
+
+# 2026年4月14日 盘前技术分析报告
+
+---
+
+## 第一部分：隔夜市场回顾
+
+### 亚洲盘（18:00–02:00 ET）
+
+市场在亚洲时段整体窄幅震荡，波动极为有限。ES=F 仅在 6921.5–6926.0 的 4.5 点区间内运行，NQ=F 同样被压缩在 25571.5–25598.25 的 26.75 点区间。YM=F 表现相对活跃但方向不明（48394–48430）。GC=F 在亚洲盘走出一波温和上行，从 4780 推升至 4799.2，显示亚洲资金对黄金有一定买入兴趣。
+
+**特征：** 典型的亚盘低波动蓄势格局，价格紧贴前收盘运行，未给出方向性信号。
+
+### 欧洲盘（02:00–08:00 ET）
+
+欧洲盘是隔夜行情的主战场。ES=F 在欧洲时段完成了隔夜全部区间的拓展：先下探至隔夜低点 6920.25 后快速反弹，一路推升至隔夜高点 6945.25，完成 25 点的完整扫荡。NQ=F 表现最为强劲，从 25564.5 拉升至 25698.0，涨幅达 133.5 点，科技股买盘明显。YM=F 在欧洲盘触及隔夜两端极值（48344–48534），190 点区间显示资金在道指上存在分歧。GC=F 在欧盘创下隔夜最高 4820.4，随后回落至 4791.5，高位获利了结迹象明显。
+
+**特征：** 欧洲盘资金明确推动风险偏好交易——科技领涨、黄金冲高回落、VIX 大幅走低。
+
+### 隔夜总结
+
+隔夜整体方向**偏多**。核心信号：
+1. NQ=F 领涨，涨幅 +0.54%，远超 ES=F 的 +0.28% 和 YM=F 的 +0.05%——科技股主导上行
+2. VIX 从 19.12 暴跌至 18.13（-5.18%），恐慌大幅释放
+3. 黄金冲高后回落，风险偏好回升
+4. 所有股指期货均站上前收盘，且在隔夜高点附近运行
+
+**对美盘暗示：** 开盘大概率跳空高开。关键观察隔夜高点能否在 RTH 得到确认——若开盘后守住隔夜高点回测，则强势延续；若快速回补缺口，则隔夜涨幅为假突破。
+
+---
+
+## 第二部分：期货品种分析
+
+---
+
+### ES=F — E-mini S&P 500 Futures（期货合约价位）
+
+**隔夜走势：**
+- 亚洲盘：高=6926.0，低=6921.5，方向=窄幅震荡
+- 欧洲盘：高=6945.25，低=6920.25，方向=先探底后强势上行
+- 隔夜总区间：6920.25 – 6945.25（25 点）
+
+**多时间框架分析：**
+- **周线：** 上周收出长下影线（周低 6510 附近→周高 6863），显示周线级别需求强劲。当前价格 6942 已突破上周高点 6863，周线结构偏多，但逼近前期供给区 6950–7000。
+- **日线：** 前日收于 6922.75，今日盘前已突破至 6942。日线正在修复此前的急跌，形成 V 型反弹结构。5日均线预估在 6750 附近快速上翘，价格远离均线，有短期过度延伸风险。
+- **小时线：** 自欧洲盘低点 6920 以来形成清晰的上升通道，连续 higher highs / higher lows，盘中结构偏多。
+
+**关键价位（期货合约价位）：**
+
+| 级别 | 价位 | 原因 |
+|------|------|------|
+| 强阻力 | **6950–6955** | 隔夜高点上方整数关口+前期供给区，此处可能密集卖单 |
+| 弱阻力 | **6945.25** | 隔夜高点（ONH），首次测试可能有反应 |
+| 枢轴点 | **6932.75** | 隔夜区间中位数，盘中多空分水岭 |
+| 弱支撑 | **6925–6926** | 亚洲盘高点 + 开盘价附近，回踩第一支撑 |
+| 强支撑 | **6920–6922** | 隔夜低点 + 前日收盘，跌破则隔夜多头结构瓦解 |
+
+**订单流关注点：**
+- **6945–6950 区域：** 关注卖方堆叠失衡——若出现连续3层以上的卖方失衡（Ask 被大量吸收），可能形成短期顶部，提供高胜率做空入场
+- **6920–6925 区域：** 关注买方堆叠失衡——若回踩此区域出现连续买方失衡（Bid 被吸收但价格不跌），确认隔夜低点支撑有效，做多信号
+- **开盘后前15分钟：** 初始平衡区间（IBR）的形成过程中，关注失衡信号方向以判断当日基调
+
+**今日操盘建议：**
+- **方向偏好：** 多（置信度：中）
+- **理由：** 隔夜结构偏多+VIX大跌确认风险情绪改善，但价格逼近前期供给区6950+，且远离均线有回撤风险，不宜追高
+- **关注入场区域：** 6920–6930（回踩隔夜低点/枢轴区域做多）
+- **止损参考：** 6916（隔夜低点下方4点）
+- **目标位：** T1=6945（隔夜高点），T2=6960（前期供给区上沿突破）
+- **风险提示：** 跳空高开后前30分钟波动剧烈，避免开盘即入场；若有盘前经济数据发布需留意
+
+---
+
+### NQ=F — E-mini Nasdaq 100 Futures（期货合约价位）
+
+**隔夜走势：**
+- 亚洲盘：高=25598.25，低=25571.5，方向=窄幅震荡
+- 欧洲盘：高=25698.0，低=25564.5，方向=强势上行，隔夜领涨品种
+- 隔夜总区间：25560.0 – 25698.0（133.5 点）
+
+**多时间框架分析：**
+- **周线：** 上周从周低约 25200 反弹至 25700 附近，周线下影线明显。当前 25681 正测试上周高点区域，若突破将打开上行空间至 26000 心理关口。
+- **日线：** 前日收于 25543.5，今日盘前跳涨 138 点（+0.54%），日线呈连续上攻形态。科技板块 XLK +2.1% 领涨全市场，为 NQ 提供基本面支撑。
+- **小时线：** 欧洲盘形成近乎单边上行走势，小时线连续阳线，动能强劲。但高位出现窄幅整理（25680–25698），可能在积蓄突破动能或形成短期顶部。
+
+**关键价位（期货合约价位）：**
+
+| 级别 | 价位 | 原因 |
+|------|------|------|
+| 强阻力 | **25750–25800** | 前期密集成交区+整百关口，预期强供给 |
+| 弱阻力 | **25698** | 隔夜高点（ONH），突破确认则成为支撑 |
+| 枢轴点 | **25630** | 隔夜区间中位，盘中多空分界 |
+| 弱支撑 | **25575–25600** | 亚洲盘区间+开盘价位，回踩第一档 |
+| 强支撑 | **25540–25560** | 前日收盘+隔夜低点，失守则日内转空 |
+
+**订单流关注点：**
+- **25690–25700 区域：** 隔夜高点正被反复测试。若 footprint 显示此处买方持续堆叠失衡（大量 Market Buy 吃穿 Ask），突破概率大增——跟随做多
+- **25750–25800 区域：** 若价格推至此处，关注卖方堆叠失衡出现——这是高胜率逆势做空区域
+- **25560–25580 区域：** 回踩时若出现 Delta 翻正+买方堆叠失衡，确认做多
+
+**今日操盘建议：**
+- **方向偏好：** 多（置信度：中高）
+- **理由：** NQ 隔夜领涨，科技板块 +2.1% 遥遥领先，VIX 暴跌，资金明确流入成长股。NQ 的 beta 更高，在风险偏好日表现通常优于 ES
+- **关注入场区域：** 25580–25630（回踩枢轴/亚洲盘区域做多）；或 25700 突破回踩确认做多
+- **止损参考：** 25540（隔夜低点下方）
+- **目标位：** T1=25750，T2=25850
+- **风险提示：** NQ 日内波动大，133 点的隔夜区间意味着止损需要适当放宽；科技股集中度高，个股异动（如 AAPL、NVDA 盘前消息）可能导致 NQ 快速反转
+
+---
+
+### GC=F — Gold Futures（期货合约价位）
+
+**隔夜走势：**
+- 亚洲盘：高=4799.2，低=4780.0，方向=温和上行，亚洲买盘推动
+- 欧洲盘：高=4820.4，低=4773.3，方向=冲高回落，高位抛压显现
+- 隔夜总区间：4767.6 – 4820.4（47.1 美元）
+
+**多时间框架分析：**
+- **周线：** 黄金处于强势上升趋势中，周线连续上行。4800+ 是历史新高区域，周线级别无明确阻力参考，需关注整数关口和斐波那契扩展位。
+- **日线：** 前日收于 4767.4，今日冲高至 4820 后回落至 4791，留下长上影线形态。日线显示多头动能减弱，高位获利了结压力增大。
+- **小时线：** 欧洲盘形成明确的倒 V 结构——快速拉升至 4820 后持续回落，小时线转为偏空。当前 4791 处于隔夜区间中部偏上。
+
+**关键价位（期货合约价位）：**
+
+| 级别 | 价位 | 原因 |
+|------|------|------|
+| 强阻力 | **4820–4825** | 隔夜高点+历史新高区域，冲高被打回，强供给确认 |
+| 弱阻力 | **4800–4805** | 心理整数关口+亚洲盘高点，短期阻力 |
+| 枢轴点 | **4793** | 隔夜区间中位 |
+| 弱支撑 | **4775–4780** | 亚洲盘低点+欧洲盘回落低点 |
+| 强支撑 | **4767–4770** | 前日收盘+隔夜低点，黄金多头最后防线 |
+
+**订单流关注点：**
+- **4800–4810 区域：** 黄金回升至 4800 上方时，关注卖方堆叠失衡——欧盘已在此区域证明了卖压存在，二次测试若再现卖方失衡可做空
+- **4770–4775 区域：** 若价格回踩此处出现买方堆叠失衡，可能是日内波段做多机会
+- **4820 区域：** 仅在极强突破动能（连续买方堆叠+Delta 持续正值）出现时才考虑追多
+
+**今日操盘建议：**
+- **方向偏好：** 观望偏空（置信度：中）
+- **理由：** 黄金冲高回落形成倒 V，且风险偏好日（股指涨+VIX跌）通常压制黄金。但黄金处于周线强势趋势中，逆势做空需要严格纪律
+- **关注入场区域：** 4800–4810（反弹至阻力区做空）
+- **止损参考：** 4822（隔夜高点上方 2 美元）
+- **目标位：** T1=4780（亚洲盘低点），T2=4770（前日收盘）
+- **风险提示：** 黄金在地缘事件驱动下可能瞬间脉冲 20-30 美元，止损必须严格执行；盘中若美元走弱，黄金可能重新走强
+
+---
+
+## 第三部分：ETF 品种分析
+
+---
+
+### SPY — SPDR S&P 500 ETF（ETF 价位）
+
+**关键价位（ETF 价位）：**
+
+| 级别 | 价位 | 原因 |
+|------|------|------|
+| 强阻力 | **$692–$694** | 前期密集成交区+历史供给区 |
+| 弱阻力 | **$689–$690** | 盘前高位附近+整数关口 |
+| 枢轴点 | **$686.30** | 前日高点，突破已确认转为支撑待验证 |
+| 弱支撑 | **$683–$685** | 盘前价格与前日高点之间的缓冲区 |
+| 强支撑 | **$679–$680** | 前日收盘+整数关口+5日VWAP（$675.19）上方 |
+
+**今日操盘建议：**
+- **方向偏好：** 多（置信度：中）
+- **关注入场区域：** $685–$687（回踩前日高点转支撑做多）
+- **止损参考：** $683.50
+- **目标位：** T1=$690，T2=$694
+- **备注：** 盘前 $688.75 已跳空突破前日高点 $686.30 约 2.45 美元。开盘若直接冲高至 $690+ 不追，等回踩。若开盘回补缺口跌回 $686 以下则观望。5日VWAP在 $675.19，价格偏离较远，注意均值回归风险。
+
+---
+
+### QQQ — Invesco QQQ Trust（ETF 价位）
+
+**关键价位（ETF 价位）：**
+
+| 级别 | 价位 | 原因 |
+|------|------|------|
+| 强阻力 | **$626–$627** | 上周高点 $626.74，本周首个强阻力 |
+| 弱阻力 | **$622–$623** | 盘前价格附近的短期供给 |
+| 枢轴点 | **$618** | 前日高点 $617.96 上方，多空分界 |
+| 弱支撑 | **$614–$616** | 跳空缺口中部区域 |
+| 强支撑 | **$611–$612** | 前日收盘，缺口下沿 |
+
+**今日操盘建议：**
+- **方向偏好：** 多（置信度：中高）
+- **关注入场区域：** $617–$619（回踩前日高点区域做多）；或 $627 突破回踩确认
+- **止损参考：** $615.50
+- **目标位：** T1=$625，T2=$630
+- **备注：** QQQ 盘前 $621.38 跳空高开，XLK +2.1% 提供强劲板块支撑。上周高点 $626.74 是关键关口——突破则打开上行空间，受阻则可能形成双顶。5日VWAP在 $605.27，偏离极大，短线追多风险较高。
+
+---
+
+## 第四部分：今日市场总览
+
+### 整体市场情绪：风险偏好（Risk-On）
+
+今日市场情绪明确偏向风险偏好：
+- 股指全线高开，科技领涨（NQ +0.54%）
+- VIX 暴跌 5.18%，恐慌快速消退
+- 黄金冲高回落，避险需求减弱
+- 板块分化清晰：成长>价值，进攻>防御
+
+### VIX 环境评估
+
+**VIX 18.13（-5.18%）** 处于中性偏低区域，对堆叠失衡策略的影响：
+
+- **正面：** VIX 从 19+ 快速回落至 18，说明市场波动预期下降，价格走势更有序，footprint 上的失衡信号**可靠性提升**——假信号减少，真实机构订单流更容易辨识
+- **注意：** VIX 18 仍高于长期均值（约 15-16），意味着日内仍有较大波幅（ES 25-30点日内区间可期），止损不能设太紧
+- **具体建议：** ES 止损建议 4-6 点，NQ 止损 25-40 点，比低 VIX 环境（VIX<15）适当放宽 20-30%
+
+### 隔夜关键信息
+
+1. **NQ 领涨是今日最重要的信号** — 科技板块 +2.1% 远超其他板块，说明资金在主动配置成长股
+2. **欧洲盘完成了方向性定价** — 亚洲盘蓄势→欧洲盘爆发的模式，美盘大概率延续方向
+3. **黄金倒V形态** — 风险偏好日已确认，黄金多头短期承压
+
+### 需要规避的时段
+
+- **09:30–09:45 ET：** 开盘前15分钟，等待初始平衡区间（IBR）形成，避免盲目入场
+- **留意盘前是否有重大经济数据发布**（如零售销售、PPI等），数据发布前后各 5 分钟避免持仓
+- **10:00 ET 附近：** 若有二级数据发布，注意快速波动
+
+### 板块轮动信号
+
+| 板块 | 涨跌幅 | 信号 |
+|------|--------|------|
+| XLK 科技 | **+2.10%** | 🔥 资金强势流入，日内首选 NQ/QQQ |
+| XLF 金融 | +1.75% | 第二梯队，财报季驱动 |
+| XLY 可选消费 | +0.91% | 风险偏好确认 |
+| XLP 必需消费 | **-1.00%** | ⚠️ 防御板块被抛售 |
+| XLU 公用事业 | **-1.21%** | ⚠️ 防御板块被抛售 |
+
+**轮动解读：** 经典的 Risk-On 轮动格局——资金从防御板块（XLP、XLU）流出，涌入进攻板块（XLK、XLF、XLY）。这种极端分化（科技 +2.1% vs 公用事业 -1.2%，差距 3.3%）通常出现在市场信心快速修复的阶段。**日内交易优先选择 NQ/QQQ 多头方向**，避免做多防御板块个股。
+
+---
+
+### ⚡ 今日核心操盘策略
+
+> **首选：NQ=F 回踩做多**
+> 等待 NQ 回踩 25580–25630 区域，配合 footprint 买方堆叠失衡信号入场做多，止损 25540，目标 25750/25850。科技板块强势领涨+VIX暴跌，这是今日胜率最高的方向。
+
+> **次选：ES=F 回踩做多**
+> 等待 ES 回踩 6920–6930 区域，确认支撑后做多，止损 6916，目标 6945/6960。
+
+> **机会型：GC=F 反弹做空**
+> 黄金反弹至 4800–4810 出现卖方堆叠失衡时轻仓做空，止损 4822，目标 4780/4770。逆趋势交易，仓位减半。
+
+> **纪律提醒：** 跳空高开日不追高。等待回踩或突破回踩确认后入场。若开盘后 30 分钟内缺口被完全回补，今日转为观望。
+
+[05:32:42] Pre-market report generated and synced to Obsidian
+[05:32:42] Generating Pine Scripts...
+Pine Script saved to: scripts/levels-SPY-2026-04-14.pine
+//@version=5
+indicator("DayTrader Levels — SPY (2026-04-14)", overlay=true)
+
+hline(686.295, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
+hline(676.58, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
+hline(679.46, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
+hline(688.01, "PREMARKET PRICE", color.orange, hline.style_dotted, 1)
+hline(675.19, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(686.3, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
+hline(651.06, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
+
+Pine Script saved to: scripts/levels-QQQ-2026-04-14.pine
+//@version=5
+indicator("DayTrader Levels — QQQ (2026-04-14)", overlay=true)
+
+hline(617.96, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
+hline(608.11, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
+hline(611.07, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
+hline(620.68, "PREMARKET PRICE", color.orange, hline.style_dotted, 1)
+hline(605.27, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(626.74, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
+hline(578.4, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
+
+Pine Script saved to: scripts/levels-ESF-2026-04-14.pine
+//@version=5
+indicator("DayTrader Levels — ES=F (2026-04-14)", overlay=true)
+
+hline(6945.25, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
+hline(6920.25, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
+hline(6922.75, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
+hline(6881.08, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(6945.25, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
+hline(6767.0, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
+
+Pine Script saved to: scripts/levels-NQF-2026-04-14.pine
+//@version=5
+indicator("DayTrader Levels — NQ=F (2026-04-14)", overlay=true)
+
+hline(25698.0, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
+hline(25560.0, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
+hline(25543.5, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
+hline(25367.94, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(25698.0, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
+hline(24904.5, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
+
+Pine Script saved to: scripts/levels-GCF-2026-04-14.pine
+//@version=5
+indicator("DayTrader Levels — GC=F (2026-04-14)", overlay=true)
+
+hline(4820.4, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
+hline(4767.6, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
+hline(4767.4, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
+hline(4785.25, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(4820.4, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
+hline(4704.0, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)
+
+[05:32:47] === Completed ===

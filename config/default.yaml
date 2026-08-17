@@ -1,0 +1,39 @@
+# config/default.yaml
+database:
+  path: data/db/daytrader.db
+
+notifications:
+  enabled: false
+  channels:
+    telegram:
+      enabled: false
+      bot_token: ""
+      chat_id: ""
+    discord:
+      enabled: false
+      webhook_url: ""
+    imessage:
+      enabled: false
+      recipient: ""
+
+obsidian:
+  enabled: true
+  vault_path: ~/Documents/DayTrader Vault
+  daily_folder: Daily
+  weekly_folder: Weekly
+
+premarket:
+  push_on_complete: false
+
+backtest:
+  default_config: stacked_imbalance.yaml
+
+journal:
+  db_path: data/db/journal.db
+  contract_path: docs/trading/Contract.md
+  setups_dir: docs/trading/setups
+  data_cache_dir: data/cache/ohlcv
+  obsidian:
+    trades_folder: DayTrader/Trades
+    dry_runs_folder: DayTrader/DryRuns
+    checklists_folder: DayTrader/Daily

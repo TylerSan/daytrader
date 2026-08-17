@@ -1,0 +1,112 @@
+[14:30:01] === DayTrader Weekly Plan ===
+[14:30:01] Step 1: Collecting market data...
+$ES=F: possibly delisted; no price data found  (period=1d)
+$NQ=F: possibly delisted; no price data found  (period=1d)
+$YM=F: possibly delisted; no price data found  (period=1d)
+$GC=F: possibly delisted; no price data found  (period=1d)
+---
+date: 2026-04-12
+generated: 2026-04-12T14:30:10
+type: weekly
+tags: [trading, weekly, plan]
+---
+
+# 周度交易计划 — 2026-04-12 起
+
+*生成时间: 2026-04-12 14:30 UTC*
+
+---
+## 数据速览
+
+![overview](images/weekly-2026-04-12-overview.webp)
+![levels](images/weekly-2026-04-12-levels.webp)
+![sectors](images/weekly-2026-04-12-sectors.webp)
+
+---
+## 市场数据概览
+
+> [!info]- 详细数据：期货 & VIX
+> ### 期货 & VIX
+> | 品种 | 现价 | 涨跌幅 | 前收 |
+> |------|------|--------|------|
+> | ES=F | 6855.25 | -0.12% | 6855.25 |
+> | NQ=F | 25281.25 | +0.12% | 25281.25 |
+> | YM=F | 48129.0 | -0.59% | 48129.0 |
+> | GC=F | 4787.4 | -0.64% | 4787.4 |
+> | ^VIX | 19.23 | -1.33% | 19.49 |
+
+> [!info]- 详细数据：板块强弱
+> ### 板块强弱
+> | ETF | 板块 | 涨跌幅 |
+> |-----|------|--------|
+> | XLB | Materials | +0.56% |
+> | XLK | Technology | +0.39% |
+> | XLRE | Real Estate | +0.21% |
+> | XLY | Consumer Discretionary | +0.13% |
+> | XLC | Communication | -0.28% |
+> | XLI | Industrials | -0.39% |
+> | XLU | Utilities | -0.40% |
+> | XLE | Energy | -0.68% |
+> | XLF | Financials | -1.09% |
+> | XLP | Consumer Staples | -1.29% |
+> | XLV | Healthcare | -1.35% |
+
+> [!info]- 详细数据：关键价位
+> ### 关键价位
+> **SPY:**
+> - Prior Day High: 682.03
+> - Prior Day Low: 678.45
+> - Prior Day Close: 679.91
+> - Approx Vwap 5D: 671.12
+> - Weekly High: 682.03
+> - Weekly Low: 651.06
+>
+> **QQQ:**
+> - Prior Day High: 613.67
+> - Prior Day Low: 609.58
+> - Prior Day Close: 610.19
+> - Approx Vwap 5D: 600.78
+> - Weekly High: 613.67
+> - Weekly Low: 578.4
+>
+> **IWM:**
+> - Prior Day High: 262.75
+> - Prior Day Low: 260.34
+> - Prior Day Close: 261.96
+> - Approx Vwap 5D: 257.95
+> - Weekly High: 262.9
+> - Weekly Low: 249.52
+>
+
+---
+## 周末消息面
+
+- **Foreigners Own Nearly $30 Trillion in U.S. Stocks and Bonds. Here Is Why That Number Should Be on Every Investor's Radar** — *Motley Fool*
+- **Trump Promised Cheap Beef — The Cattle Trade Crushed The S&P 500 For Years** — *Benzinga*
+- **I’m 45 and I’ve Barely Invested in the Stock Market. I Recently Inherited $50,000. What Should I Do?** — *24/7 Wall St.*
+- **Everyone’s Buying ETFs: Here’s What Retirement Savers Should Watch Out For** — *GOBankingRates*
+- **Nvidia vs. AMD: Which Stock Will Outperform The Market In 2026** — *24/7 Wall St.*
+- **Inflation Soars to 3.3% in March: Prediction Markets Now See 63% Chance It Hits 4% in 2026** — *24/7 Wall St.*
+- **CPI Inflation Rate Up Nearly +1%, As Expected** — *Zacks*
+- **Exchange-Traded Funds Higher, Equity Futures Mixed Pre-Bell Amid Lingering Geopolitical Uncertainty, CPI Focus** — *MT Newswires*
+- **Magnificent 7 stocks are splitting again: Chart of the Day** — *Yahoo Finance*
+- **SpaceX to land in your 401(k) no matter what. Michael Burry flags retirement savings are 'exit liquidity' for insiders** — *Moneywise*
+- **SPY, QQQ Call Volumes Spiked Minutes Before Tariff Pause Announcement: Alexandria Ocasio-Cortez Demands Disclosure From Congress Members** — *Benzinga*
+- **QQQ Beat the Market 46% Last Year. Here’s the Volatility You’re Really Buying** — *24/7 Wall St.*
+- **Sandisk to join Nasdaq-100 in latest index reshuffle; Atlassian to be removed** — *Investing.com*
+- **Exchange-Traded Funds Fall, US Equities Mixed After Midday** — *MT Newswires*
+- **AI Agent OpenClaw Will Trade Stocks and Options for You. Here Are the Pros and Cons.** — *Barrons.com*
+- **Wall Street’s fear gauge just flashed an unusual signal that could carry the S&P 500 to 7,400 within months** — *MarketWatch*
+- **Wall Street Fear Index Signals Calm Ahead of Inflation Report** — *Barrons.com*
+- **Gold ETFs May Still Have More to Offer: Don't Look Away Yet** — *Zacks*
+- **Wall Street Fear Index Rises as Iran Cease-Fire Rally Fades** — *Barrons.com*
+- **From Euphoria to Caution. Wall Street Sees the Iran War Cease-Fire as Just a ‘Reprieve.’** — *Barrons.com*
+
+---
+*运行 `daytrader weekly analyze` 或发送 "执行周计划AI分析" 获取完整智能分析*
+
+
+AI weekly prompt saved to: data/exports/weekly-ai-prompt.md
+发送 "执行周计划AI分析" 获取完整智能周度计划。
+[14:30:10] Step 2: Running AI weekly analysis...
+env: node: No such file or directory

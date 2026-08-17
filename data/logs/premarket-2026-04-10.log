@@ -1,0 +1,142 @@
+[05:30:01] === DayTrader Pre-Market Report ===
+[05:30:01] Step 1: Collecting market data...
+---
+date: 2026-04-10
+generated: 2026-04-10T05:30:12
+type: premarket
+tags: [trading, premarket, daily]
+---
+
+# 盘前分析报告 — 2026-04-10
+*生成时间: 05:30:12 UTC*
+
+---
+## 数据速览
+
+![overview](images/premarket-2026-04-10-overview.webp)
+![sectors](images/premarket-2026-04-10-sectors.webp)
+![movers](images/premarket-2026-04-10-movers.webp)
+![levels](images/premarket-2026-04-10-levels.webp)
+
+---
+## 一、宏观环境
+
+> [!info]- 详细数据：指数期货 & VIX
+> ### 1.1 指数期货 & VIX
+> | 品种 | 现价 | 涨跌幅 | 前收 | 日高 | 日低 |
+> |------|------|--------|------|------|------|
+> | ES=F | 6868.5 | +0.08% | 6863.25 | 6871.0 | 6850.5 |
+> | NQ=F | 25287.0 | +0.14% | 25251.5 | 25303.75 | 25193.0 |
+> | YM=F | 48418.0 | +0.00% | 48416.0 | 48431.0 | 48284.0 |
+> | GC=F | 4792.2 | -0.54% | 4818.0 | 4810.0 | 4752.7 |
+> | ^VIX | 19.43 | -0.31% | 19.49 | 19.79 | 19.25 |
+
+> [!info]- 详细数据：隔夜走势
+> ### 1.2 隔夜走势（Globex）
+> | 品种 | 隔夜高 | 隔夜低 | 区间 | 亚洲高 | 亚洲低 | 欧洲高 | 欧洲低 |
+> |------|--------|--------|------|--------|--------|--------|--------|
+> | ES=F | 6871.0 | 6850.5 | 20.5 | 6866.25 | 6861.5 | 6871.0 | 6850.5 |
+> | NQ=F | 25302.25 | 25202.75 | 99.5 | 25284.75 | 25257.5 | 25302.25 | 25202.75 |
+> | YM=F | 48431.0 | 48284.0 | 147.0 | 48378.0 | 48354.0 | 48424.0 | 48284.0 |
+> | GC=F | 4795.5 | 4752.7 | 42.8 | 4794.6 | 4781.3 | 4792.9 | 4752.7 |
+> | ^VIX | 19.79 | 19.25 | 0.54 | — | — | 19.79 | 19.25 |
+
+> [!info]- 详细数据：板块强弱
+> ### 1.3 板块强弱
+> | ETF | 板块 | 涨跌幅 |
+> |-----|------|--------|
+> | XLY | Consumer Discretionary | +1.73% |
+> | XLI | Industrials | +1.03% |
+> | XLP | Consumer Staples | +0.81% |
+> | XLU | Utilities | +0.79% |
+> | XLRE | Real Estate | +0.68% |
+> | XLC | Communication | +0.40% |
+> | XLK | Technology | +0.27% |
+> | XLF | Financials | +0.25% |
+> | XLB | Materials | -0.15% |
+> | XLV | Healthcare | -0.23% |
+> | XLE | Energy | -1.24% |
+
+---
+## 二、消息面
+
+- **S&P 500 is back above a key level, putting stock market bulls in control: Chart of the Day** — *Yahoo Finance*
+- **Stock Market Today: Dow Wavers Ahead Of CPI Inflation Data; Nvidia Chipmaker TSMC Jumps (Live Coverage)** — *Investor's Business Daily*
+- **Fund Investors Hit By War Shock In First Quarter** — *Investor's Business Daily*
+- **The S&P 500 Is Back Above 6800. It’s a ‘Clear Positive.’** — *Barrons.com*
+- **Pre-Markets Down on Big Morning for Econ Data** — *Zacks*
+- **The Zacks Analyst Blog Highlights MAGS, QQQ, VGT, XLK, SMH and FTEC** — *Zacks*
+- **3 Key Signals Paint a Bullish Picture for US Stocks** — *BeInCrypto*
+- **AI Agent OpenClaw Will Do Your Trades. Should You Try It?** — *Barrons.com*
+- **VOO vs. QQQ: Broad Market Exposure or Concentrated Mega-Cap Growth?** — *Motley Fool*
+- **Wall Street Fear Index Signals Calm Ahead of Inflation Report** — *Barrons.com*
+- **Gold ETFs May Still Have More to Offer: Don't Look Away Yet** — *Zacks*
+- **Wall Street Fear Index Rises as Iran Cease-Fire Rally Fades** — *Barrons.com*
+- **From Euphoria to Caution. Wall Street Sees the Iran War Cease-Fire as Just a ‘Reprieve.’** — *Barrons.com*
+- **Market indexes soared on the Iran truce, but risks remain** — *Motley Fool*
+- **Gold and silver prices today, Friday, April 10: Gold and silver steady ahead of inflation report** — *Yahoo Personal Finance*
+- **How to buy gold on Robinhood** — *Yahoo Personal Finance*
+- **Top Fund That Invests In Gold Miners Delivers Midas-Like Returns** — *Investor's Business Daily*
+- **G Mining Ventures to acquire G2 Goldfields** — *Mining Technology*
+- **Assessing Royal Gold (RGLD) Valuation After Recent Share Pullback And Ongoing Growth Expectations** — *Simply Wall St.*
+- **Stock market today: Dow, S&P 500, Nasdaq futures stall in cautious wait for inflation print, Iran peace talks** — *Yahoo Finance*
+
+---
+## 三、盘前异动
+
+> [!info]- 详细数据：盘前异动
+> | 代码 | 名称 | 现价 | 缺口 | 量比 |
+> |------|------|------|------|------|
+> | PLTR | Palantir Technologies Inc. | 129.27 | -8.16% | 2.06x |
+> | AMZN | Amazon.com, Inc. | 234.74 | +6.10% | 1.44x |
+> | META | Meta Platforms, Inc. | 634.31 | +3.57% | 0.83x |
+> | MARA | MARA Holdings, Inc. | 9.78 | +2.95% | 1.0x |
+> | NFLX | Netflix, Inc. | 102.23 | +2.86% | 0.88x |
+> | AMD | Advanced Micro Devices, Inc. | 238.22 | +2.76% | 0.75x |
+> | COIN | Coinbase Global, Inc. | 170.5 | -2.62% | 1.08x |
+> | CVX | Chevron Corporation | 189.79 | -1.61% | 0.71x |
+
+---
+## 四、关键价位
+
+> [!info]- 详细数据：SPY 关键价位
+> ### SPY
+> | 价位类型 | 价格 |
+> |----------|------|
+> | Prior Day High | 681.15 |
+> | Prior Day Low | 673.77 |
+> | Prior Day Close | 676.01 |
+> | Premarket Price | 681.582 |
+> | Approx Vwap 5D | 666.86 |
+> | Weekly High | 681.16 |
+> | Weekly Low | 645.11 |
+
+> [!info]- 详细数据：QQQ 关键价位
+> ### QQQ
+> | 价位类型 | 价格 |
+> |----------|------|
+> | Prior Day High | 610.5 |
+> | Prior Day Low | 603.03 |
+> | Prior Day Close | 606.09 |
+> | Premarket Price | 612.32 |
+> | Approx Vwap 5D | 595.9 |
+> | Weekly High | 610.5 |
+> | Weekly Low | 571.92 |
+
+> [!info]- 详细数据：IWM 关键价位
+> ### IWM
+> | 价位类型 | 价格 |
+> |----------|------|
+> | Prior Day High | 262.9 |
+> | Prior Day Low | 258.8 |
+> | Prior Day Close | 260.47 |
+> | Premarket Price | 263.45 |
+> | Approx Vwap 5D | 256.22 |
+> | Weekly High | 262.9 |
+> | Weekly Low | 244.87 |
+
+
+AI analysis prompt saved to: data/exports/ai-analysis-prompt.md
+Paste the prompt content to Claude Code for AI-powered analysis.
+[05:30:12] Step 2: Running AI analysis...
+env: node: No such file or directory

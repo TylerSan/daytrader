@@ -1,0 +1,9 @@
+//@version=5
+indicator("DayTrader Levels — GC=F (2026-04-14)", overlay=true)
+
+hline(4820.4, "PRIOR DAY HIGH", color.red, hline.style_solid, 1)
+hline(4767.6, "PRIOR DAY LOW", color.green, hline.style_solid, 1)
+hline(4767.4, "PRIOR DAY CLOSE", color.gray, hline.style_dashed, 1)
+hline(4785.25, "APPROX VWAP 5D", color.purple, hline.style_dotted, 1)
+hline(4820.4, "WEEKLY HIGH", color.new(#ff0000, 50), hline.style_dashed, 1)
+hline(4704.0, "WEEKLY LOW", color.new(#00ff00, 50), hline.style_dashed, 1)

@@ -1,0 +1,79 @@
+[13:01:13] === DayTrader Weekly Plan ===
+[13:01:13] Step 1: Collecting market data...
+---
+date: 2026-04-09
+generated: 2026-04-09T13:01:16
+type: weekly
+tags: [trading, weekly, plan]
+---
+
+# 周度交易计划 — 2026-04-09 起
+
+*生成时间: 2026-04-09 13:01 UTC*
+
+---
+## 市场数据概览
+
+### 期货 & VIX
+
+| 品种 | 现价 | 涨跌幅 | 前收 |
+|------|------|--------|------|
+| ES=F | 6869.0 | +0.66% | 6823.75 |
+| NQ=F | 25261.25 | +0.75% | 25074.25 |
+| YM=F | 48466.0 | +0.67% | 48144.0 |
+| GC=F | 4795.5 | +0.38% | 4777.2 |
+| ^VIX | 19.58 | -6.94% | 25.78 |
+
+### 板块强弱
+
+| ETF | 板块 | 涨跌幅 |
+|-----|------|--------|
+| XLY | Consumer Discretionary | +1.72% |
+| XLI | Industrials | +1.03% |
+| XLP | Consumer Staples | +0.80% |
+| XLU | Utilities | +0.78% |
+| XLRE | Real Estate | +0.71% |
+| XLC | Communication | +0.40% |
+| XLK | Technology | +0.28% |
+| XLF | Financials | +0.27% |
+| XLB | Materials | -0.15% |
+| XLV | Healthcare | -0.24% |
+| XLE | Energy | -1.21% |
+
+### 关键价位
+
+**SPY:**
+- Prior Day High: 681.15
+- Prior Day Low: 673.77
+- Prior Day Close: 676.01
+- Approx Vwap 5D: 666.67
+- Weekly High: 681.15
+- Weekly Low: 645.11
+
+**QQQ:**
+- Prior Day High: 610.5
+- Prior Day Low: 603.03
+- Prior Day Close: 606.09
+- Approx Vwap 5D: 595.76
+- Weekly High: 610.5
+- Weekly Low: 571.92
+
+**IWM:**
+- Prior Day High: 262.9
+- Prior Day Low: 258.8
+- Prior Day Close: 260.47
+- Approx Vwap 5D: 256.17
+- Weekly High: 262.9
+- Weekly Low: 244.87
+
+---
+*运行 `daytrader weekly analyze` 或发送 "执行周计划AI分析" 获取完整智能分析*
+
+
+AI weekly prompt saved to: data/exports/weekly-ai-prompt.md
+发送 "执行周计划AI分析" 获取完整智能周度计划。
+[13:01:16] Step 2: Running AI weekly analysis...
+[13:09:16] AI weekly analysis saved to data/exports/weekly-ai-analysis-2026-04-09.md
+[13:09:16] Step 3: Merging final weekly report...
+[13:09:16] Final weekly report synced to Obsidian
+[13:09:16] === Completed ===
