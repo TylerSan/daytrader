@@ -112,3 +112,7 @@ journal.add_command(sanity_group)
 journal.add_command(dry_run_group)
 journal.add_command(resume_gate_group)
 journal.add_command(audit_cmd)
+
+
+if __name__ == "__main__":
+    cli()
