@@ -75,6 +75,13 @@ from .swings import find_swings
 LINE_COLUMNS = ["line_id", "price", "direction", "kind", "created_idx",
                 "swing_idx", "follow_through", "touched_idx"]
 
+#: Disposition channel (spec §3 修订 (二): the voided / expired counts are a
+#: reporting obligation, since lines that die unused never appear as rows).
+COUNTER_KINDS = ("gap", "phantom", "plain")
+COUNTER_FIELDS = ("created", "touched", "voided_gap_through", "voided_rollover",
+                  "expired", "open_at_end", "skipped_no_anchor",
+                  "expired_at_touch")
+
 _OPEN, _TOUCH, _THROUGH = "open", "touch", "through"
 
 
@@ -95,7 +102,19 @@ def blackout_mask(rollover: np.ndarray, bars: int) -> np.ndarray:
     return mask
 
 
-def scan_lines(df: pd.DataFrame, cfg: AuditConfig) -> pd.DataFrame:
+def new_counters() -> dict[str, dict[str, int]]:
+    return {kind: dict.fromkeys(COUNTER_FIELDS, 0) for kind in COUNTER_KINDS}
+
+
+def scan_lines(df: pd.DataFrame, cfg: AuditConfig, *, with_counters: bool = False):
+    """Detect every line. ``with_counters`` also returns the disposition channel.
+
+    The returned frame is unchanged by the flag; the counters explain what
+    happened to the lines that produced no event — expired, gapped through,
+    killed by a rollover, still open at the end of the frame — plus the plain
+    (C2) candidates that the expiry clock removed at their touch bar, which
+    spec §3 修订 (二) requires the report to disclose.
+    """
     n = len(df)
     high = df["high"].to_numpy(dtype=float)
     low = df["low"].to_numpy(dtype=float)
@@ -106,8 +125,10 @@ def scan_lines(df: pd.DataFrame, cfg: AuditConfig) -> pd.DataFrame:
     masked = blackout_mask(rollover, cfg.rollover_blackout_bars)
 
     records: list[dict] = []
+    counters = new_counters()
 
     def _emit(price, direction, kind, created_idx, swing_idx, follow_through):
+        counters[kind]["created"] += 1
         records.append({"line_id": len(records), "price": float(price),
                         "direction": int(direction), "kind": kind,
                         "created_idx": int(created_idx),
@@ -127,9 +148,11 @@ def scan_lines(df: pd.DataFrame, cfg: AuditConfig) -> pd.DataFrame:
     open_lines: list[dict] = []   # {"rec": index into records, price, direction}
     active: list = []             # confirmed, unbroken swings
     tested: set[int] = set()      # swing idx that already produced a plain event
+    stale_plain: set[int] = set()  # swing idx dropped by the C2 expiry clock
 
     for t in range(n):
         if rollover[t]:
+            counters["gap"]["voided_rollover"] += len(open_lines)
             open_lines.clear()
             active.clear()
             tested.clear()
@@ -141,12 +164,16 @@ def scan_lines(df: pd.DataFrame, cfg: AuditConfig) -> pd.DataFrame:
         for ln in open_lines:
             created = records[ln["rec"]]["created_idx"]
             if session_ord[t] - session_ord[created] >= cfg.expiry_days:
+                counters["gap"]["expired"] += 1
                 continue  # stale line, dies without an event
             state = _state(ln["direction"], ln["price"], low[t], high[t])
             if state is _TOUCH:
                 records[ln["rec"]]["touched_idx"] = t
+                counters["gap"]["touched"] += 1
             elif state is _OPEN:
                 survivors.append(ln)
+            else:
+                counters["gap"]["voided_gap_through"] += 1
         open_lines = survivors
 
         # 2. swings become usable only once confirmed
@@ -173,17 +200,25 @@ def scan_lines(df: pd.DataFrame, cfg: AuditConfig) -> pd.DataFrame:
             direction = -1 if sw.kind == "H" else 1
             state = _state(direction, sw.price, low[t], high[t])
             if state is _THROUGH:
+                if int(sw.idx) not in tested:
+                    counters["plain"]["voided_gap_through"] += 1
                 continue  # price never traded at it; drop, same as a gap line
             alive.append(sw)
             if sw.idx in tested or t <= sw.confirmed_idx or state is not _TOUCH:
                 continue
             if session_ord[t] - session_ord[sw.confirmed_idx] >= cfg.expiry_days:
+                if int(sw.idx) not in stale_plain:
+                    stale_plain.add(int(sw.idx))
+                    counters["plain"]["expired_at_touch"] += 1
                 continue
             tested.add(int(sw.idx))
             rec = _emit(sw.price, direction, "plain", sw.confirmed_idx, sw.idx,
                         None)
             records[rec]["touched_idx"] = t
+            counters["plain"]["touched"] += 1
         active = alive
+
+    counters["gap"]["open_at_end"] = len(open_lines)
 
     # ---- pass 2: time-displaced placebo for every gap line ----------------
     rng = np.random.default_rng(cfg.seed)
@@ -196,35 +231,42 @@ def scan_lines(df: pd.DataFrame, cfg: AuditConfig) -> pd.DataFrame:
         span = (np.searchsorted(pool_ord, session_ord[t], side="right")
                 - same_day)
         if len(pool) - span == 0:
+            counters["phantom"]["skipped_no_anchor"] += 1
             continue  # no admissible anchor a trading day away
         draw = int(rng.integers(len(pool) - span))
         anchor = int(pool[draw if draw < same_day else draw + span])
         distance = abs(close[t] - gap["price"])
         rec = _emit(close[anchor] - gap["direction"] * distance,
                     gap["direction"], "phantom", anchor, gap["swing_idx"], None)
-        records[rec]["touched_idx"] = _first_touch(
+        touched, fate = _first_touch(
             anchor, records[rec]["price"], gap["direction"], n, cfg,
             low, high, rollover, masked, session_ord)
+        records[rec]["touched_idx"] = touched
+        counters["phantom"][fate] += 1
 
     out = pd.DataFrame(records, columns=LINE_COLUMNS)
-    if not len(out):
-        return out
-    return out.astype({"touched_idx": float, "follow_through": object})
+    if len(out):
+        out = out.astype({"touched_idx": float, "follow_through": object})
+    return (out, counters) if with_counters else out
 
 
 def _first_touch(created, price, direction, n, cfg, low, high, rollover,
                  masked, session_ord):
-    """Walk a placebo line forward under the same lifecycle rules as a gap."""
+    """Walk a placebo line forward under the same lifecycle rules as a gap.
+
+    Returns ``(touched_idx | None, fate)`` where fate is the counter field
+    naming how the line ended.
+    """
     for t in range(created + 1, n):
         if rollover[t]:
-            return None  # contract change voids the line
+            return None, "voided_rollover"  # contract change voids the line
         if session_ord[t] - session_ord[created] >= cfg.expiry_days:
-            return None
+            return None, "expired"
         if masked[t]:
             continue
         state = _state(direction, price, low[t], high[t])
         if state is _TOUCH:
-            return t
+            return t, "touched"
         if state is _THROUGH:
-            return None
-    return None
+            return None, "voided_gap_through"
+    return None, "open_at_end"
