@@ -11,11 +11,14 @@ Contract
   broken swing H (support), -1 for a broken swing L (resistance). The bounce
   target is ``line + dir * half`` and the penetration target
   ``line - dir * half``, so the two are equidistant by construction.
-* Bar ``t0`` may only resolve as ``"penetrate"``. Its bounce side is unusable:
-  the bar's range up to the moment of the touch was traversed *before* the
-  event existed, so crediting it as a bounce would score pre-touch movement.
-  A blow-through bar is different — it is unambiguous new information against
-  the line, so it resolves immediately.
+* Bar ``t0`` may resolve only as ``"penetrate"`` or ``"indeterminate"``. Its
+  bounce side is unusable: the bar's range up to the moment of the touch was
+  traversed *before* the event existed, so crediting it as a bounce would score
+  pre-touch movement. A blow-through is different — unambiguous new information
+  against the line — so it resolves immediately. But a t0 bar that reaches both
+  targets is ``"indeterminate"``, not a penetration: calling it a penetration
+  charged every group's widest touch bars to the penetration side, and the
+  groups do not carry equally wide touch bars〔spec §3 修订 (二)〕.
 * From ``t0 + 1`` onward both sides are live. A bar that reaches both targets
   is ``"indeterminate"`` (intrabar order is unknowable at 5m resolution) and is
   reported, not silently dropped. Otherwise the first side reached wins.
@@ -41,9 +44,10 @@ def run_race(df: pd.DataFrame, t0: int, line_price: float, bounce_dir: int,
         return high[i] >= target if upward else low[i] <= target
 
     up_is_bounce = bounce_dir > 0
-    # touch bar: penetration only
+    # touch bar: penetration or indeterminate, never a bounce
     if _reached(t0, pen_target, not up_is_bounce):
-        return "penetrate"
+        return ("indeterminate" if _reached(t0, bounce_target, up_is_bounce)
+                else "penetrate")
 
     last = min(t0 + timeout_bars, len(df) - 1)
     for i in range(t0 + 1, last + 1):

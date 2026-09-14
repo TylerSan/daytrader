@@ -28,9 +28,17 @@ def test_penetration_target_reached_first():
 
 
 def test_touch_bar_blow_through_is_penetration():
-    # t0 already trades through 98: the bounce side of that bar is polluted by
-    # the pre-touch range, so only penetration may be judged there.
-    assert _race([(103.0, 97.5), (102.5, 102.0)]) == "penetrate"
+    # t0 already trades through 98 and never reaches 102: the bounce side of
+    # that bar is polluted by the pre-touch range, so only penetration may be
+    # judged there.
+    assert _race([(101.5, 97.5), (102.5, 102.0)]) == "penetrate"
+
+
+def test_touch_bar_reaching_both_sides_is_indeterminate():
+    # revised ruling: t0 may resolve only as penetrate or indeterminate, and a
+    # double hit there is indeterminate — judging it a penetration scored the
+    # groups asymmetrically.
+    assert _race([(103.0, 97.5), (102.5, 102.0)]) == "indeterminate"
 
 
 def test_both_targets_on_the_same_bar_is_indeterminate():
@@ -39,6 +47,17 @@ def test_both_targets_on_the_same_bar_is_indeterminate():
 
 def test_neither_target_within_timeout():
     rows = [(100.5, 99.0)] + [(101.0, 99.0)] * 6
+    assert _race(rows, timeout=3) == "timeout"
+
+
+def test_hit_on_the_last_admissible_bar_still_counts():
+    rows = [(100.5, 99.0), (101.0, 99.0), (101.0, 99.0), (102.0, 99.0)]
+    assert _race(rows, timeout=3) == "bounce"  # hit lands exactly on t0 + timeout
+
+
+def test_hit_one_bar_past_the_window_is_a_timeout():
+    rows = [(100.5, 99.0), (101.0, 99.0), (101.0, 99.0), (101.0, 99.0),
+            (102.0, 99.0)]
     assert _race(rows, timeout=3) == "timeout"
 
 
