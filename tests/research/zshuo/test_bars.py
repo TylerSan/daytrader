@@ -48,6 +48,10 @@ def test_tag_sessions_rth_during_est():
     # 14:30 UTC in January == 09:30 EST (UTC-5), vs 13:30 UTC in June (EDT).
     df = resample_5m(_mk_1m(start="2024-01-08 14:30", n=5))
     assert tag_sessions(df).rth.all()
+    # 14:00 UTC == 09:00 EST premarket: a wrong fixed -4 offset would read it
+    # as 10:00 and misclassify it as RTH, so this locks the DST-aware math.
+    pre = resample_5m(_mk_1m(start="2024-01-08 14:00", n=5))
+    assert not tag_sessions(pre).rth.any()
 
 
 def test_session_date_is_cme_trading_day_not_calendar_day():
