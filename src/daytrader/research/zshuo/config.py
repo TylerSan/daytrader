@@ -13,7 +13,7 @@ class AuditConfig:
     race_timeout_bars: int = 48     # 4h at 5min; unresolved -> "timeout"
     rollover_blackout_bars: int = 12  # 1h each side of instrument_id change
     min_gap_between_events: int = 24  # non-overlap spacing within group+dir (spec §3)
-    phantom_offset_ticks: tuple[int, int] = (8, 24)  # uniform range, toward price side
+    phantom_offset_ticks: tuple[int, int] = (8, 24)  # VOID — superseded by spec 修订(二) time-displaced placebo; kept for grid config equality only
     seed: int = 42
 
 

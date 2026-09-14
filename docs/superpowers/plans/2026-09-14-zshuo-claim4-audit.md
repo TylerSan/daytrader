@@ -10,6 +10,8 @@
 
 **Spec:** `docs/research/zshuo-price-action/specs/2026-09-14-claim4-gap-sr-audit-design.md`（定义冻结，实现不得偏离；发现 spec 歧义时停下报告，不自行发挥）。
 
+> **⚠️ 作废声明（2026-09-14 修订(二) 后追加）**：本计划 Task 3/4 的示例代码与 Self-Review 中关于 phantom（"靠价格一侧"偏移）与 t0 判定（"只能判 penetrate"）的内容已被 spec 修订(二) 作废——合规审查证明原 phantom 设计产生 88.6% 路过式秒触的退化对照。现行权威实现见 commit 7e4aa852（时移 placebo、t0 双侧判 indeterminate、触线须含线价、双侧 blackout mask）。Task 6/7 执行时以 spec 修订(二) 与实际代码为准，并须实现修订(二)新增的报告义务（placebo 同 bar 占比、C2 剔除计数、跳空作废计数、C2 总体随 expiry 变动注记、indeterminate 上下界稳健性）。
+
 **约定:** 所有命令在 worktree 根 `/Users/tylersan/Projects/Day trading/.claude/worktrees/mystifying-keller-cd440b` 下执行；测试跑 `uv run pytest`。每个 Task 结束提交一次。
 
 ---
