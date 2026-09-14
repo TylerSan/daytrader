@@ -1,3 +1,5 @@
+import datetime as dt
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -40,3 +42,27 @@ def test_tag_sessions_rth():
     night = resample_5m(_mk_1m(start="2024-06-03 22:00", n=5))  # 18:00 ET
     assert tag_sessions(df).rth.all()
     assert not tag_sessions(night).rth.any()
+
+
+def test_tag_sessions_rth_during_est():
+    # 14:30 UTC in January == 09:30 EST (UTC-5), vs 13:30 UTC in June (EDT).
+    df = resample_5m(_mk_1m(start="2024-01-08 14:30", n=5))
+    assert tag_sessions(df).rth.all()
+
+
+def test_session_date_is_cme_trading_day_not_calendar_day():
+    # Sunday 18:05 ET opens Monday's CME trading day.
+    sunday_evening = resample_5m(_mk_1m(start="2024-06-02 22:05", n=5))
+    tagged = tag_sessions(sunday_evening)
+    assert list(tagged.session_date) == [dt.date(2024, 6, 3)]  # Monday
+
+
+def test_session_date_unchanged_before_1800_et():
+    df = resample_5m(_mk_1m(start="2024-06-03 13:30", n=5))  # 09:30 ET Monday
+    assert list(tag_sessions(df).session_date) == [dt.date(2024, 6, 3)]
+
+
+def test_resample_rejects_empty_frame():
+    empty = _mk_1m(n=0)
+    with pytest.raises(ValueError, match="empty 1m frame"):
+        resample_5m(empty)
