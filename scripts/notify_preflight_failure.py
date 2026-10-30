@@ -10,11 +10,18 @@ Designed for invocation from run_*_launchd.sh wrappers. Stand-alone
 
 Best-effort: any exception → silent exit 0. NEVER block the wrapper.
 
+With `--degraded` (2026-10-29) the wrappers are reporting a TWS-only
+preflight failure that was NOT lost: the report is being generated from
+yfinance (`reports run --source yfinance`). The message is then an ℹ️
+info note (data delayed ~15 min, no OI / contract chain) with the command
+to re-run on IB once TWS is back, instead of the ⚠️ "cadence LOST" alert.
+
 Usage:
-    uv run python scripts/notify_preflight_failure.py <cadence> <scheduled_time_pt>
+    uv run python scripts/notify_preflight_failure.py <cadence> <scheduled_time_pt> [--degraded]
 
 Example:
     uv run python scripts/notify_preflight_failure.py premarket "06:00 PT"
+    uv run python scripts/notify_preflight_failure.py asia "23:00 PT" --degraded
 """
 
 from __future__ import annotations
@@ -41,18 +48,55 @@ def _send_telegram(token: str, chat_id: str, text: str) -> dict | None:
         return json.loads(resp.read())
 
 
+def build_message(
+    cadence: str, scheduled: str, degraded: bool, now_local: datetime
+) -> str:
+    """Telegram text for a preflight failure (degraded=True: yfinance fallback ran)."""
+    detected = now_local.strftime('%Y-%m-%d %H:%M %Z')
+    if degraded:
+        return (
+            f"ℹ️ DayTrader: TWS 不可达，已用 yfinance 降级生成\n"
+            f"\n"
+            f"Cadence: {cadence}\n"
+            f"Scheduled: {scheduled}\n"
+            f"Detected: {detected}\n"
+            f"\n"
+            f"数据延迟约 15 分钟；OI 与合约链不可用。"
+            f"TWS 恢复后可手动重跑：uv run daytrader reports run "
+            f"--type {cadence} --no-pdf"
+        )
+    return (
+        f"⚠️ DayTrader preflight FAILED\n"
+        f"\n"
+        f"Cadence: {cadence}\n"
+        f"Scheduled: {scheduled}\n"
+        f"Detected: {detected}\n"
+        f"\n"
+        f"Likely cause: TWS API unreachable "
+        f"(IBKR mobile login can kick desktop session) / "
+        f"claude CLI missing / config corrupted.\n"
+        f"\n"
+        f"Action: restart TWS, then re-run cadence manually:\n"
+        f"  cd <repo>\n"
+        f"  uv run daytrader reports run --type {cadence} --no-pdf\n"
+        f"\n"
+        f"This cadence is LOST until manually re-run."
+    )
+
+
 def main() -> int:
     # Argument parse — never block on bad args
     if len(sys.argv) < 3:
         print(
             "[notify_preflight] usage: notify_preflight_failure.py "
-            "<cadence> <scheduled_time_pt>",
+            "<cadence> <scheduled_time_pt> [--degraded]",
             file=sys.stderr,
         )
         return 0
 
     cadence = sys.argv[1]
     scheduled = sys.argv[2]
+    degraded = "--degraded" in sys.argv[3:]
 
     # Locate secrets relative to this script (scripts/ → ../config/)
     project_root = Path(__file__).resolve().parents[1]
@@ -72,24 +116,7 @@ def main() -> int:
         return 0
 
     # Build message
-    now_local = datetime.now().astimezone()
-    text = (
-        f"⚠️ DayTrader preflight FAILED\n"
-        f"\n"
-        f"Cadence: {cadence}\n"
-        f"Scheduled: {scheduled}\n"
-        f"Detected: {now_local.strftime('%Y-%m-%d %H:%M %Z')}\n"
-        f"\n"
-        f"Likely cause: TWS API unreachable "
-        f"(IBKR mobile login can kick desktop session) / "
-        f"claude CLI missing / config corrupted.\n"
-        f"\n"
-        f"Action: restart TWS, then re-run cadence manually:\n"
-        f"  cd <repo>\n"
-        f"  uv run daytrader reports run --type {cadence} --no-pdf\n"
-        f"\n"
-        f"This cadence is LOST until manually re-run."
-    )
+    text = build_message(cadence, scheduled, degraded, datetime.now().astimezone())
 
     # Send
     try:

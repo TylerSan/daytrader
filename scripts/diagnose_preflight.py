@@ -12,12 +12,18 @@ never sees a failure; the only durable evidence is the per-run log. This
 script turns that log into a verdict + action an agent (or human) can
 branch on via the exit code.
 
+Since 2026-10-29 the weekday wrappers degrade a TWS-only preflight failure
+to `reports run --source yfinance` (log line `PREFLIGHT FAILED (TWS only) —
+degrading to --source yfinance`). Those runs classify as
+SUCCESS_DEGRADED_YFINANCE / DEGRADED_YFINANCE_FAILED, never as a
+PREFLIGHT_TWS_* failure (which now only comes from older wrappers / weekly).
+
 Stdlib only. pyyaml is imported only on the `--send` path; ib_insync is
 never imported (preflight_check.tws_port_open is a plain TCP probe).
 
 Exit codes:
-    0  category is SUCCESS / SUCCESS_DEGRADED / DISCONNECT_AFTER_SUCCESS /
-       IDEMPOTENT_SKIP (nothing lost)
+    0  category is SUCCESS / SUCCESS_DEGRADED / SUCCESS_DEGRADED_YFINANCE /
+       DISCONNECT_AFTER_SUCCESS / IDEMPOTENT_SKIP (nothing lost)
     1  any other category (a cadence was lost or needs a human)
     2  no matching log found
 
@@ -58,6 +64,8 @@ TWS_PORT = 7496  # hard-coded in preflight_check.py / wrappers, not read from co
 
 SUCCESS = "SUCCESS"
 SUCCESS_DEGRADED = "SUCCESS_DEGRADED"
+SUCCESS_DEGRADED_YFINANCE = "SUCCESS_DEGRADED_YFINANCE"
+DEGRADED_YFINANCE_FAILED = "DEGRADED_YFINANCE_FAILED"
 PREFLIGHT_TWS_PORT = "PREFLIGHT_TWS_PORT"
 PREFLIGHT_TWS_API = "PREFLIGHT_TWS_API"
 PREFLIGHT_CLAUDE_MISSING = "PREFLIGHT_CLAUDE_MISSING"
@@ -74,6 +82,8 @@ UNKNOWN = "UNKNOWN"
 CATEGORIES = (
     SUCCESS,
     SUCCESS_DEGRADED,
+    SUCCESS_DEGRADED_YFINANCE,
+    DEGRADED_YFINANCE_FAILED,
     PREFLIGHT_TWS_PORT,
     PREFLIGHT_TWS_API,
     PREFLIGHT_CLAUDE_MISSING,
@@ -89,7 +99,13 @@ CATEGORIES = (
 )
 
 OK_CATEGORIES = frozenset(
-    {SUCCESS, SUCCESS_DEGRADED, DISCONNECT_AFTER_SUCCESS, IDEMPOTENT_SKIP}
+    {
+        SUCCESS,
+        SUCCESS_DEGRADED,
+        SUCCESS_DEGRADED_YFINANCE,
+        DISCONNECT_AFTER_SUCCESS,
+        IDEMPOTENT_SKIP,
+    }
 )
 PREFLIGHT_TWS_CATEGORIES = frozenset({PREFLIGHT_TWS_PORT, PREFLIGHT_TWS_API})
 
@@ -107,11 +123,19 @@ SCHEDULE_PT = {
     "asia": (23, 0),
 }
 
-NO_FALLBACK_LINE = (
-    "No databento/yfinance fallback exists in the reports code "
-    "(src/daytrader/reports has no such path); a data-source fallback "
-    "would be new code."
+YFINANCE_FALLBACK_LINE = (
+    "A yfinance fallback exists: `reports run --source yfinance` (data delayed "
+    "~15 min, no OI / contract chain). Current weekday wrappers degrade to it "
+    "automatically on a TWS-only preflight failure, so a PREFLIGHT_TWS_* log "
+    "comes from an older wrapper (or weekly)."
 )
+
+
+def yfinance_command(cadence: str | None, project_root: Path) -> str:
+    return (
+        f'cd "{project_root}" && uv run daytrader reports run '
+        f'--type {cadence or "<cadence>"} --no-pdf --source yfinance'
+    )
 
 # ---------------------------------------------------------------------------
 # Literal log signatures (see wrappers, preflight_check.py, cli/reports.py)
@@ -119,6 +143,7 @@ NO_FALLBACK_LINE = (
 
 RE_START = re.compile(r"^\[run_(\w+)_launchd\] start (\S+)")
 RE_PREFLIGHT_FAILED = re.compile(r"\] PREFLIGHT FAILED")
+RE_DEGRADED_YF = re.compile(r"\] PREFLIGHT FAILED \(TWS only\) — degrading to --source yfinance")
 RE_PF_PORT = re.compile(r"\[preflight\] ✗ TWS port unreachable")
 RE_PF_API = re.compile(r"\[preflight\] ✗ TWS API not responsive")
 RE_PF_CLAUDE = re.compile(r"\[preflight\] ✗ claude CLI not found on PATH")
@@ -162,6 +187,7 @@ class Diagnosis:
     escalation_sent: bool = False
     evidence: list[str] = field(default_factory=list)
     report_path: str | None = None
+    degraded: bool = False  # wrapper fell back to `--source yfinance`
 
 
 def _clip(line: str, n: int = 200) -> str:
@@ -170,7 +196,26 @@ def _clip(line: str, n: int = 200) -> str:
 
 
 def classify_log(text: str) -> Diagnosis:
-    """Classify a single wrapper run log. Pure function."""
+    """Classify a single wrapper run log. Pure function.
+
+    A yfinance-degraded run (TWS-only preflight failure, then
+    `reports run --source yfinance`) is classified like a normal pipeline run
+    and then remapped: exit 0 → SUCCESS_DEGRADED_YFINANCE, a failed pipeline
+    → DEGRADED_YFINANCE_FAILED (the inner cause stays in the evidence).
+    Skip / Telegram-delivery / interrupted outcomes keep their category with
+    `degraded=True`.
+    """
+    diag = _classify(text)
+    if not diag.degraded:
+        return diag
+    if diag.category == SUCCESS:
+        diag.category = SUCCESS_DEGRADED_YFINANCE
+    elif diag.category in (CLAUDE_CLI, VALIDATION, IB_RUNTIME, UNKNOWN):
+        diag.category = DEGRADED_YFINANCE_FAILED
+    return diag
+
+
+def _classify(text: str) -> Diagnosis:
     lines = text.splitlines()
     diag = Diagnosis()
 
@@ -208,6 +253,13 @@ def classify_log(text: str) -> Diagnosis:
 
     pf = find(RE_PREFLIGHT_FAILED)
     notify = find(RE_NOTIFY_OK)
+    degraded = find(RE_DEGRADED_YF)
+    if degraded:
+        # TWS-only preflight failure, wrapper went on with --source yfinance:
+        # not a lost cadence; classify the yfinance pipeline run below.
+        diag.degraded = True
+        add(degraded[1])
+        pf = None
 
     # 1. Preflight failures (wrapper exits 0 with no exit= line).
     if pf:
@@ -547,7 +599,14 @@ def build_recommendation(
                 "Escalation was NOT sent for this run (no `Telegram OK` line; the "
                 "notifier's stderr goes to /dev/null)."
             )
-        lines.append(NO_FALLBACK_LINE)
+        if cat != "weekly" and not already_recovered and not tws_up_now:
+            lines.append(
+                "Or catch up now without TWS (yfinance, degraded): "
+                + yfinance_command(cat, project_root)
+            )
+            if tws_up_now is False:
+                et_trap()
+        lines.append(YFINANCE_FALLBACK_LINE)
     elif diag.category == PREFLIGHT_CLAUDE_MISSING:
         lines.append(
             "`claude` was not on the wrapper PATH (/opt/homebrew/bin, /usr/local/bin, "
@@ -588,6 +647,31 @@ def build_recommendation(
         lines.append("Nothing to do.")
         if diag.report_path:
             lines.append(f"Report: {diag.report_path}")
+    elif diag.category == SUCCESS_DEGRADED_YFINANCE:
+        lines.append(
+            "TWS was unreachable at preflight, so the report was generated from "
+            "yfinance (data delayed ~15 min, no OI / contract chain). Nothing lost."
+        )
+        if diag.report_path:
+            lines.append(f"Report: {diag.report_path}")
+        lines.append(
+            "Optional IB-quality re-run once TWS is up: the degraded run already "
+            "wrote the success row, so it must be deleted first (destructive, ask "
+            "the user), then: " + cmd
+        )
+    elif diag.category == DEGRADED_YFINANCE_FAILED:
+        lines.append(
+            f"TWS was unreachable and the yfinance fallback run also failed "
+            f"(exit {diag.exit_code}). Read the evidence (claude -p / validation / "
+            "yfinance error) before re-running."
+        )
+        if already_recovered:
+            lines.append(f"{cat} already recovered (success recorded for its date), nothing to do.")
+        elif tws_up_now:
+            lines.append(f"TWS is up now at {TWS_HOST}:{TWS_PORT}. Catch-up: {cmd}")
+        else:
+            lines.append(f"Retry without TWS: {yfinance_command(cat, project_root)}")
+        et_trap()
     elif diag.category == SUCCESS_DEGRADED:
         lines.append(
             "Weekly data report saved but the AI analysis failed (exit 0). Optional: "
@@ -703,6 +787,12 @@ def render_summary(logs: list[Path]) -> str:
         out.append(f"  {cad}: {cells}")
     out.append("")
     out.append(f"preflight failures with no Telegram escalation: {no_esc}")
+    n_deg = total[SUCCESS_DEGRADED_YFINANCE] + total[DEGRADED_YFINANCE_FAILED]
+    if n_deg:
+        out.append(
+            f"yfinance-degraded runs (TWS down, not lost): {n_deg} "
+            f"(ok={total[SUCCESS_DEGRADED_YFINANCE]}, failed={total[DEGRADED_YFINANCE_FAILED]})"
+        )
     return "\n".join(out)
 
 

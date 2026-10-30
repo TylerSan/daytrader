@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS reports (
     cache_hit_rate REAL,
     duration_seconds REAL,
     estimated_cost_usd REAL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    data_source TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_reports_date_type ON reports(date, report_type);
@@ -133,7 +134,18 @@ class StateDB:
         """Create all tables. Idempotent (uses IF NOT EXISTS)."""
         conn = self._get_conn()
         conn.executescript(_SCHEMA)
+        self._migrate(conn)
         conn.commit()
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        """Additive, idempotent column migrations for DBs created with an
+        older `_SCHEMA` (CREATE TABLE IF NOT EXISTS never alters them)."""
+        report_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(reports)")
+        }
+        if "data_source" not in report_cols:
+            conn.execute("ALTER TABLE reports ADD COLUMN data_source TEXT")
 
     def close(self) -> None:
         if self._conn is not None:
@@ -150,15 +162,21 @@ class StateDB:
         time_et: str,
         status: str,
         created_at: datetime,
+        data_source: str | None = None,
     ) -> int:
-        """Insert a pending/in-progress report row, return its id."""
+        """Insert a pending/in-progress report row, return its id.
+
+        ``data_source`` records which market-data client fed the report
+        ("ib" / "yfinance"); None for legacy callers.
+        """
         conn = self._get_conn()
         cur = conn.execute(
             """INSERT INTO reports
-               (report_type, date, time_pt, time_et, status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (report_type, date, time_pt, time_et, status, created_at,
+                data_source)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (report_type, date_et, time_pt, time_et, status,
-             created_at.isoformat()),
+             created_at.isoformat(), data_source),
         )
         conn.commit()
         return cur.lastrowid

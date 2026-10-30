@@ -54,6 +54,7 @@ class IntradayFourHGenerator(BaseCadenceGenerator):
         plan_parser=None,
         trades_query=None,
         retrospective=None,
+        data_source: str = "ib",
     ) -> None:
         super().__init__(
             ib_client=ib_client,
@@ -66,6 +67,7 @@ class IntradayFourHGenerator(BaseCadenceGenerator):
             term_price_fetcher=term_price_fetcher,
             tick_sizes=tick_sizes,
             news_collector=news_collector,
+            data_source=data_source,
         )
         self._config = config
         self.plan_reader = plan_reader

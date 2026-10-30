@@ -72,8 +72,26 @@ def dry_run(report_type: str) -> None:
     default=False,
     help="Skip PDF rendering (faster runs for testing).",
 )
+@click.option(
+    "--source",
+    "source",
+    type=click.Choice(["ib", "yfinance", "auto"]),
+    default="auto",
+    show_default=True,
+    help=(
+        "Market-data source. auto = try IB (TWS) first and fall back to "
+        "yfinance (delayed ~15 min, no OI / contract chain) when TWS is "
+        "unreachable; ib = IB only (fail if TWS is down); yfinance = skip IB."
+    ),
+)
 @click.pass_context
-def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: bool) -> None:
+def run_cmd(
+    ctx: click.Context,
+    report_type: str,
+    no_telegram: bool,
+    no_pdf: bool,
+    source: str,
+) -> None:
     """Run a real report end-to-end (touches IB Gateway and Anthropic API).
 
     Phase 5 implements `--type premarket` and `--type eod`. Other types
@@ -87,6 +105,7 @@ def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: boo
     from daytrader.core.ib_client import IBClient
     from daytrader.core.state import StateDB
     from daytrader.reports.core.ai_analyst import AIAnalyst
+    from daytrader.reports.core.data_source import select_data_client, tcp_probe
     from daytrader.reports.core.orchestrator import Orchestrator
 
     # Phase 5.5 (2026-05-05): now also active for intraday-4h-1, intraday-4h-2,
@@ -124,12 +143,22 @@ def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: boo
     state = StateDB(str(project_root / cfg.reports.state_db_path))
     state.initialize()
 
-    ib = IBClient(
-        host=cfg.reports.ib.host,
-        port=cfg.reports.ib.port,
-        client_id=cfg.reports.ib.client_id,
+    def _yf_factory():
+        # Lazy import: the CLI must still load if the yfinance client
+        # module is absent; only a yfinance run needs it.
+        from daytrader.reports.core.yf_client import YFClient
+        return YFClient()
+
+    ib, source_name = select_data_client(
+        source,
+        ib_factory=lambda: IBClient(
+            host=cfg.reports.ib.host,
+            port=cfg.reports.ib.port,
+            client_id=cfg.reports.ib.client_id,
+        ),
+        yf_factory=_yf_factory,
+        probe=lambda: tcp_probe(cfg.reports.ib.host, cfg.reports.ib.port),
     )
-    ib.connect()
     try:
         ai = AIAnalyst()  # claude -p backend; no API key needed
 
@@ -194,6 +223,7 @@ def run_cmd(ctx: click.Context, report_type: str, no_telegram: bool, no_pdf: boo
             chart_renderer=chart_renderer,
             pdf_renderer=pdf_renderer,
             telegram_pusher=telegram_pusher,
+            data_source=source_name,
         )
         # Phase 5.5: dispatch table for 6 active types
         now = datetime.now(timezone.utc)

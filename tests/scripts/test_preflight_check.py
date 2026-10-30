@@ -171,3 +171,134 @@ def test_preflight_skip_api_check_bypasses_handshake(monkeypatch):
         assert "api handshake skipped" in out or "skipped" in out
     finally:
         srv.close()
+
+
+# ---------------------------------------------------------------------------
+# --no-tws — weekly pipeline is yfinance-only, so its preflight must not gate
+# on TWS (added 2026-10-29: 18 of 26 Sunday weekly runs since May were lost
+# to "TWS port unreachable").
+# ---------------------------------------------------------------------------
+
+
+WEEKLY_WRAPPER = PROJECT_ROOT / "scripts" / "run_weekly_launchd.sh"
+
+
+def _make_project_root(tmp_path: Path, *, user_yaml: bool = True) -> Path:
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "default.yaml").write_text("{}\n")
+    if user_yaml:
+        (cfg / "user.yaml").write_text("{}\n")
+    return tmp_path
+
+
+def _run_main(monkeypatch, module, *argv: str) -> int:
+    monkeypatch.setattr(sys, "argv", ["preflight_check.py", *argv])
+    return module.main()
+
+
+def _patch_tws_down_and_forbid_api(monkeypatch, module) -> None:
+    monkeypatch.setattr(module, "tws_port_open", lambda **kw: False)
+
+    def _must_not_be_called(**kw):
+        raise AssertionError("tws_api_responsive must not be called under --no-tws")
+
+    monkeypatch.setattr(module, "tws_api_responsive", _must_not_be_called)
+
+
+def test_no_tws_flag_in_help():
+    result = _run("--help")
+    assert result.returncode == 0
+    assert "--no-tws" in result.stdout
+
+
+def test_no_tws_passes_when_tws_down(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    port_calls: list = []
+
+    def _port_down(**kw):
+        port_calls.append(kw)
+        return False
+
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "tws_port_open", _port_down)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: True)
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--project-root", str(root))
+
+    assert rc == 0
+    assert port_calls == []
+    out = capsys.readouterr().out
+    assert "[preflight] - TWS checks skipped (--no-tws)" in out
+    assert "all checks passed" in out
+
+
+def test_no_tws_silent_prints_nothing_on_success(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: True)
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--silent", "--project-root", str(root))
+
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_no_tws_still_fails_when_claude_missing(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: False)
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--silent", "--project-root", str(root))
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "claude CLI not found on PATH" in err
+    assert "TWS" not in err
+
+
+def test_no_tws_still_fails_when_user_yaml_missing(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: True)
+    root = _make_project_root(tmp_path, user_yaml=False)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--silent", "--project-root", str(root))
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "user.yaml" in err
+    assert "TWS" not in err
+
+
+def test_without_no_tws_port_down_still_fails(monkeypatch, tmp_path, capsys):
+    """Regression guard: default (daily/premarket) path still gates on TWS."""
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: True)
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--silent", "--project-root", str(root))
+
+    assert rc == 1
+    assert "TWS port unreachable" in capsys.readouterr().err
+
+
+def test_weekly_wrapper_uses_no_tws():
+    text = WEEKLY_WRAPPER.read_text()
+    assert "preflight_check.py --no-tws --silent" in text
+    # The failure path must survive: log line, Telegram escalation, exit 0.
+    assert "PREFLIGHT FAILED" in text
+    assert 'notify_preflight_failure.py" "weekly" "Sunday 14:00 PT"' in text
+
+
+def test_weekly_wrapper_bash_syntax_ok():
+    result = subprocess.run(
+        ["bash", "-n", str(WEEKLY_WRAPPER)], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr

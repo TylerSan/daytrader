@@ -78,6 +78,7 @@ class EODGenerator:
         trades_query=None,
         retrospective=None,
         tomorrow_planner=None,
+        data_source: str = "ib",
     ) -> None:
         if not symbols:
             raise ValueError("symbols must be non-empty")
@@ -90,12 +91,15 @@ class EODGenerator:
         self.ai_analyst = ai_analyst
         self.symbols = list(symbols)
         self.tradable_symbols = list(tradable_symbols)
-        self.prompt_builder = prompt_builder or PromptBuilder()
+        self.prompt_builder = prompt_builder or PromptBuilder(
+            data_source=data_source
+        )
         self.validator = validator or OutputValidator()
         self.underlying_price_fetcher = underlying_price_fetcher
         self.term_price_fetcher = term_price_fetcher
         self.tick_sizes = tick_sizes or {s: 0.25 for s in symbols}
         self.news_collector = news_collector
+        self.data_source = data_source
         self.plan_reader = plan_reader
         self.plan_parser = plan_parser
         self.trades_query = trades_query

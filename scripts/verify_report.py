@@ -13,6 +13,8 @@ Checks (each -> PASS / WARN / FAIL / SKIP):
   6. session_sections  premarket only: 亚盘 / 欧盘 paragraphs present (template gap -> WARN)
   7. language          CJK ratio of non-whitespace chars
   8. required_sections reuse output_validator.REQUIRED_SECTIONS
+  9. data_source       informational: ib vs yfinance fallback (report-text marker + state.db
+                       reports.data_source); never FAIL, WARN only if the two disagree
 
 Exit codes: 0 PASS (or WARN without --strict), 1 FAIL (or WARN with --strict),
 2 report file could not be located at all.
@@ -620,6 +622,75 @@ def check_required_sections(report_type: str, text: str, project_root: Path) -> 
 
 
 # ---------------------------------------------------------------------------
+# Check 9: data source (ib vs yfinance fallback) - informational, never FAIL
+# ---------------------------------------------------------------------------
+
+YF_MARKER = "数据源：yfinance"
+YF_MARKER_RE = re.compile(r"数据源\s*[：:]\s*yfinance", re.IGNORECASE)
+
+
+def read_db_data_source(report_type: str, date_str: str, project_root: Path) -> str | None:
+    """`reports.data_source` of the latest success row (else latest row).
+
+    None when unknown: no DB, no row, NULL value, or an old DB whose
+    `reports` table predates the data_source column.
+    """
+    db = project_root / "data" / "state.db"
+    if report_type == "weekly" or not db.exists():
+        return None
+    try:
+        conn = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(reports)")}
+            if "data_source" not in cols:
+                return None
+            row = conn.execute(
+                "SELECT data_source FROM reports WHERE report_type=? AND date=? "
+                "ORDER BY (status='success') DESC, id DESC LIMIT 1",
+                (report_type, date_str),
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    if not row or not row[0]:
+        return None
+    return str(row[0]).strip().lower() or None
+
+
+def check_data_source(text: str | None, db_source: str | None) -> Check:
+    """Which market-data client fed the report. Non-failing by design."""
+    name = "data_source"
+    text_yf = None if text is None else bool(YF_MARKER_RE.search(text))
+    db_yf = None if db_source is None else db_source == "yfinance"
+    if text_yf is None and db_yf is None:
+        return Check(name, SKIP, "no report text and no state.db data_source (column absent/NULL)")
+    if text_yf is None:
+        text_part = "report text unavailable"
+    elif text_yf:
+        text_part = f'report text contains "{YF_MARKER}"'
+    else:
+        text_part = f'report text has no "{YF_MARKER}" marker'
+    db_part = (
+        f"state.db data_source={db_source}" if db_source is not None
+        else "state.db data_source unknown (column absent/NULL)"
+    )
+    evidence = f"{text_part}; {db_part}"
+    if text_yf is not None and db_yf is not None and text_yf != db_yf:
+        return Check(
+            name,
+            WARN,
+            f"mismatch ({YF_MARKER} per {'report text' if text_yf else 'state.db'} only): {evidence}",
+        )
+    if text_yf or db_yf:
+        detail = f"data_source: yfinance ({evidence})"
+        if YF_MARKER not in detail:
+            detail += f" [{YF_MARKER}]"
+        return Check(name, PASS, detail)
+    return Check(name, PASS, f"data_source: ib ({evidence})")
+
+
+# ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
 
@@ -656,6 +727,7 @@ def run_checks(args) -> dict:
     checks.append(log_check)
     checks.append(check_telegram(report_type, log_text))
 
+    text: str | None = None
     if found is not None:
         text = found.read_text(encoding="utf-8", errors="replace")
         checks.append(check_futures_not_etf(text))
@@ -665,6 +737,7 @@ def run_checks(args) -> dict:
     else:
         for n in ("futures_not_etf", "session_sections", "language", "required_sections"):
             checks.append(Check(n, SKIP, "no report file to read"))
+    checks.append(check_data_source(text, read_db_data_source(report_type, date_str, project_root)))
 
     verdict = verdict_of(checks)
     if found is None:

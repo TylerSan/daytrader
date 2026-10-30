@@ -91,3 +91,19 @@ def test_body_mentions_output_filenames(pattern):
 def test_body_mentions_failure_signatures(signature):
     _, body = _split()
     assert signature in body
+
+
+@pytest.mark.parametrize(
+    "signature",
+    [
+        "PREFLIGHT FAILED (TWS only) — degrading to --source yfinance",
+        "[reports] data source: yfinance (IB unreachable)",
+        "[reports] data source: yfinance (--source yfinance)",
+        "数据源：yfinance（延迟约 15 分钟；OI 与合约链不可用）",
+        "[yfinance 降级]",
+        "SUCCESS_DEGRADED_YFINANCE",
+    ],
+)
+def test_body_mentions_yfinance_degrade_signatures(signature):
+    _, body = _split()
+    assert signature in body

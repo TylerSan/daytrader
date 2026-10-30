@@ -117,3 +117,26 @@ def test_ai_analyst_handles_subprocess_timeout(monkeypatch):
     analyst = AIAnalyst(max_retries=1)
     with pytest.raises(RuntimeError, match="timeout"):
         analyst.call(messages=[{"role": "user", "content": "x"}], max_tokens=128)
+
+
+def test_ai_analyst_error_includes_stdout_when_cli_prints_cause_there(monkeypatch):
+    """claude CLI prints auth failures on stdout; the error must carry them."""
+    from daytrader.reports.core.ai_analyst import AIAnalyst
+
+    def fake_run(cmd, **kwargs):
+        return _completed_process(
+            "Failed to authenticate: OAuth session expired and could not be refreshed",
+            returncode=1,
+            stderr="Permission allow rule (...) has a wildcard",
+        )
+
+    monkeypatch.setattr(
+        "daytrader.reports.core.ai_analyst.subprocess.run", fake_run
+    )
+    monkeypatch.setattr("daytrader.reports.core.ai_analyst.time.sleep", lambda s: None)
+    analyst = AIAnalyst(max_retries=0)
+    with pytest.raises(RuntimeError) as exc_info:
+        analyst.call(messages=[{"role": "user", "content": "hi"}])
+    msg = str(exc_info.value)
+    assert "Permission allow rule" in msg
+    assert "stdout: Failed to authenticate" in msg

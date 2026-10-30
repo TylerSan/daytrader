@@ -54,6 +54,7 @@ class PremarketGenerator:
         term_price_fetcher=None,
         tick_sizes: dict[str, float] | None = None,
         news_collector=None,
+        data_source: str = "ib",
     ) -> None:
         if not symbols:
             raise ValueError("symbols must be non-empty")
@@ -64,12 +65,15 @@ class PremarketGenerator:
         self.ai_analyst = ai_analyst
         self.symbols = list(symbols)
         self.tradable_symbols = list(tradable_symbols)
-        self.prompt_builder = prompt_builder or PromptBuilder()
+        self.prompt_builder = prompt_builder or PromptBuilder(
+            data_source=data_source
+        )
         self.validator = validator or OutputValidator()
         self.underlying_price_fetcher = underlying_price_fetcher
         self.term_price_fetcher = term_price_fetcher
         self.tick_sizes = tick_sizes
         self.news_collector = news_collector
+        self.data_source = data_source
 
     def generate(
         self,

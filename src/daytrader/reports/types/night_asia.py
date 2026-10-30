@@ -51,6 +51,7 @@ class NightAsiaGenerator(BaseCadenceGenerator):
         term_price_fetcher=None,
         tick_sizes: dict[str, float] | None = None,
         news_collector=None,
+        data_source: str = "ib",
     ) -> None:
         super().__init__(
             ib_client=ib_client,
@@ -63,6 +64,7 @@ class NightAsiaGenerator(BaseCadenceGenerator):
             term_price_fetcher=term_price_fetcher,
             tick_sizes=tick_sizes,
             news_collector=news_collector,
+            data_source=data_source,
         )
         self._config = config
 

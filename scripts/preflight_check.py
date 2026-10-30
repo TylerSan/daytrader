@@ -9,6 +9,12 @@ Checks:
 - TWS / IB Gateway API responsive (real ib_insync handshake)
 - `claude` CLI present on PATH
 - `config/default.yaml` and `config/user.yaml` readable
+
+With `--no-tws`, the two TWS checks (port + API handshake) are skipped
+entirely; only the claude CLI and config checks run and gate the exit
+code. Use it for pipelines that do not talk to TWS at all — e.g. the
+weekly report (`daytrader weekly run --ai`, yfinance only), which was
+losing most Sunday runs to "TWS port unreachable" before this switch.
 """
 
 from __future__ import annotations
@@ -112,37 +118,47 @@ def main() -> int:
         default=8.0,
         help="seconds to wait for ib_insync handshake (default 8s)",
     )
+    parser.add_argument(
+        "--no-tws",
+        action="store_true",
+        help="skip both TWS checks (TCP port + API handshake). For pipelines "
+        "that don't use TWS, e.g. the weekly report (yfinance only).",
+    )
     parser.add_argument("--project-root", default=str(Path(__file__).resolve().parents[1]))
     args = parser.parse_args()
 
     project_root = Path(args.project_root)
     failures: list[str] = []
 
-    # 1. TWS port (TCP level — fast, ~ms)
-    if tws_port_open(host=args.tws_host, port=args.tws_port):
+    if args.no_tws:
         if not args.silent:
-            print(f"[preflight] ✓ TWS port reachable at {args.tws_host}:{args.tws_port}")
+            print("[preflight] - TWS checks skipped (--no-tws)")
     else:
-        failures.append(f"TWS port unreachable at {args.tws_host}:{args.tws_port}")
-
-    # 2. TWS API handshake (real ib_insync connect — ~3-8s)
-    # Skip if --skip-api-check OR if port already failed (no point handshaking
-    # against a port that isn't open).
-    if args.skip_api_check:
-        if not args.silent:
-            print("[preflight] - TWS API handshake skipped (--skip-api-check)")
-    elif failures:  # port unreachable already
-        if not args.silent:
-            print("[preflight] - TWS API handshake skipped (port unreachable)")
-    else:
-        ok, msg = tws_api_responsive(
-            host=args.tws_host, port=args.tws_port, timeout=args.api_timeout
-        )
-        if ok:
+        # 1. TWS port (TCP level — fast, ~ms)
+        if tws_port_open(host=args.tws_host, port=args.tws_port):
             if not args.silent:
-                print(f"[preflight] ✓ TWS API responsive ({msg})")
+                print(f"[preflight] ✓ TWS port reachable at {args.tws_host}:{args.tws_port}")
         else:
-            failures.append(f"TWS API not responsive: {msg}")
+            failures.append(f"TWS port unreachable at {args.tws_host}:{args.tws_port}")
+
+        # 2. TWS API handshake (real ib_insync connect — ~3-8s)
+        # Skip if --skip-api-check OR if port already failed (no point handshaking
+        # against a port that isn't open).
+        if args.skip_api_check:
+            if not args.silent:
+                print("[preflight] - TWS API handshake skipped (--skip-api-check)")
+        elif failures:  # port unreachable already
+            if not args.silent:
+                print("[preflight] - TWS API handshake skipped (port unreachable)")
+        else:
+            ok, msg = tws_api_responsive(
+                host=args.tws_host, port=args.tws_port, timeout=args.api_timeout
+            )
+            if ok:
+                if not args.silent:
+                    print(f"[preflight] ✓ TWS API responsive ({msg})")
+            else:
+                failures.append(f"TWS API not responsive: {msg}")
 
     # 3. claude CLI
     if claude_cli_available():

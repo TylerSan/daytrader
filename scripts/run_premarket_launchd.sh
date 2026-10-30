@@ -6,6 +6,12 @@
 # preflight check; on failure sends a notification (best-effort) and
 # exits 0 so launchd doesn't keep retrying. On success runs the actual
 # report and lets the orchestrator handle delivery.
+#
+# Preflight degrade (2026-10-29): if preflight fails ONLY on TWS (port /
+# API handshake), the report is generated from yfinance instead
+# (`reports run --source yfinance`, delayed ~15 min, no OI / contract chain)
+# and the notifier is called with --degraded. claude/config/unknown preflight
+# failures keep the old path: notify and exit 0.
 
 # NOTE: -e is deliberately NOT set. We want preflight failure to be
 # handled (notification + clean exit 0) rather than tripping ERR exit.
@@ -41,8 +47,35 @@ echo "[run_premarket_launchd] start $(date -Iseconds)"
 echo "[run_premarket_launchd] PATH=$PATH"
 echo "[run_premarket_launchd] PWD=$PROJECT_ROOT"
 
-# Preflight check
-if ! uv run python scripts/preflight_check.py --silent; then
+# Preflight check. stderr is captured so a TWS-only failure (degrade to
+# yfinance) can be told apart from a claude/config failure (notify + exit 0);
+# it is replayed to stderr so the `[preflight] ✗ ...` lines stay in the run log.
+PREFLIGHT_ERR="$(mktemp)"
+uv run python scripts/preflight_check.py --silent 2>"$PREFLIGHT_ERR"
+prc=$?
+cat "$PREFLIGHT_ERR" >&2
+
+if [[ "$prc" -ne 0 ]]; then
+    if grep -qE 'claude CLI not found|config:' "$PREFLIGHT_ERR"; then
+        pf_kind="fatal"
+    elif grep -q 'TWS' "$PREFLIGHT_ERR"; then
+        pf_kind="tws"
+    else
+        pf_kind="fatal"
+    fi
+    rm -f "$PREFLIGHT_ERR"
+
+    if [[ "$pf_kind" == "tws" ]]; then
+        echo "[run_premarket_launchd] PREFLIGHT FAILED (TWS only) — degrading to --source yfinance"
+        osascript -e 'display notification "premarket at 06:00 PT: TWS unreachable — yfinance fallback report" with title "DayTrader" sound name "Submarine"' 2>/dev/null || true
+        uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "premarket" "06:00 PT" --degraded 2>/dev/null || true
+        uv run daytrader reports run --type premarket --no-pdf --source yfinance
+        rc=$?
+        echo "[run_premarket_launchd] reports run exit=$rc"
+        echo "[run_premarket_launchd] end $(date -Iseconds)"
+        exit "$rc"
+    fi
+
     echo "[run_premarket_launchd] PREFLIGHT FAILED — send notification and exit"
     # Best-effort macOS notification
     osascript -e 'display notification "Preflight check failed at 06:00 PT — TWS / claude / config issue" with title "DayTrader" sound name "Submarine"' 2>/dev/null || true
@@ -50,6 +83,7 @@ if ! uv run python scripts/preflight_check.py --silent; then
     uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "premarket" "06:00 PT" 2>/dev/null || true
     exit 0
 fi
+rm -f "$PREFLIGHT_ERR"
 
 # Run the actual pipeline
 echo "[run_premarket_launchd] preflight ok, invoking reports run"

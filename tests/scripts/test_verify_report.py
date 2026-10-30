@@ -286,7 +286,7 @@ def test_end_to_end_file_mode(tmp_path):
     assert set(data) >= {"type", "date", "file", "checks", "verdict", "exit_code"}
     assert data["verdict"] == "WARN" and data["exit_code"] == 0
     by_name = {c["name"]: c["status"] for c in data["checks"]}
-    assert len(data["checks"]) == 8
+    assert len(data["checks"]) == 9
     assert by_name == {
         "state_db_row": "SKIP",
         "output_file": "PASS",
@@ -296,6 +296,7 @@ def test_end_to_end_file_mode(tmp_path):
         "session_sections": "SKIP",
         "language": "PASS",
         "required_sections": "PASS",
+        "data_source": "PASS",
     }
 
     res = _run(
@@ -319,3 +320,88 @@ def test_end_to_end_english_night_fails(tmp_path):
     data = json.loads(res.stdout)
     assert res.returncode == 1
     assert {c["name"]: c["status"] for c in data["checks"]}["language"] == "FAIL"
+
+
+# -------------------------------------------------------------------- data_source
+
+YF_NOTE = "数据源：yfinance（延迟约 15 分钟；OI 与合约链不可用）"
+
+
+def _make_reports_db(root, *, with_column: bool, data_source=None, report_type="asia",
+                     date_str="2026-10-09", status="success"):
+    import sqlite3
+
+    (root / "data").mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(root / "data" / "state.db")
+    extra = ", data_source TEXT" if with_column else ""
+    conn.execute(
+        "CREATE TABLE reports (id INTEGER PRIMARY KEY, report_type TEXT, date TEXT, time_pt TEXT, "
+        "time_et TEXT, obsidian_path TEXT, pdf_path TEXT, telegram_msg_ids TEXT, status TEXT, "
+        f"failure_reason TEXT, duration_seconds REAL, created_at TEXT{extra})"
+    )
+    cols = "report_type, date, time_pt, time_et, status, duration_seconds, created_at"
+    vals = [report_type, date_str, "23:00", "02:00", status, 90.0, "2026-10-10T06:00:07+00:00"]
+    if with_column:
+        cols += ", data_source"
+        vals.append(data_source)
+    conn.execute(f"INSERT INTO reports ({cols}) VALUES ({', '.join('?' * len(vals))})", vals)
+    conn.commit()
+    conn.close()
+
+
+def test_data_source_yfinance_text_and_db_pass(vr):
+    chk = vr.check_data_source("body\n\n---\n" + YF_NOTE + "\n", "yfinance")
+    assert chk.status == "PASS"
+    assert chk.detail == (
+        'data_source: yfinance (report text contains "数据源：yfinance"; '
+        "state.db data_source=yfinance)"
+    )
+
+
+def test_data_source_ib_pass(vr):
+    chk = vr.check_data_source("纯 IB 报告", "ib")
+    assert chk.status == "PASS"
+    assert chk.detail.startswith("data_source: ib")
+    assert "state.db data_source=ib" in chk.detail
+    # unknown DB value (old schema) + no marker -> ib
+    chk = vr.check_data_source("纯 IB 报告", None)
+    assert chk.status == "PASS" and chk.detail.startswith("data_source: ib")
+
+
+def test_data_source_text_only_or_db_only_yfinance_passes_with_marker(vr):
+    chk = vr.check_data_source(YF_NOTE, None)
+    assert chk.status == "PASS" and "数据源：yfinance" in chk.detail
+    chk = vr.check_data_source(None, "yfinance")
+    assert chk.status == "PASS" and "数据源：yfinance" in chk.detail
+
+
+def test_data_source_disagreement_warns(vr):
+    assert vr.check_data_source(YF_NOTE, "ib").status == "WARN"
+    chk = vr.check_data_source("无标记", "yfinance")
+    assert chk.status == "WARN" and "数据源：yfinance" in chk.detail
+
+
+def test_data_source_nothing_known_skips(vr):
+    assert vr.check_data_source(None, None).status == "SKIP"
+
+
+def test_read_db_data_source_handles_old_schema(vr, tmp_path):
+    old = tmp_path / "old"
+    _make_reports_db(old, with_column=False)
+    assert vr.read_db_data_source("asia", "2026-10-09", old) is None
+    new = tmp_path / "new"
+    _make_reports_db(new, with_column=True, data_source="yfinance")
+    assert vr.read_db_data_source("asia", "2026-10-09", new) == "yfinance"
+    assert vr.read_db_data_source("night", "2026-10-09", new) is None
+    assert vr.read_db_data_source("asia", "2026-10-09", tmp_path / "missing") is None
+
+
+def test_end_to_end_yfinance_report_prints_marker(tmp_path):
+    md = tmp_path / "2026-10-09-2300PT-asia.md"
+    md.write_text(CHINESE_ASIA + "\n---\n" + YF_NOTE + "\n", encoding="utf-8")
+    root = tmp_path / "root"
+    _make_reports_db(root, with_column=True, data_source="yfinance")
+    res = _run("--type", "asia", "--date", "2026-10-09", "--file", str(md), "--project-root", str(root))
+    assert res.returncode == 0, res.stdout + res.stderr
+    line = next(l for l in res.stdout.splitlines() if l.startswith("data_source"))
+    assert "PASS" in line and "数据源：yfinance" in line

@@ -3,11 +3,13 @@
 #
 # Wrapper invoked by launchd at 14:00 PT on Sundays. Sources PATH so
 # `claude` and `uv` are visible (launchd starts with /usr/bin:/bin only).
-# Runs preflight check; on failure sends a notification (best-effort)
-# and exits 0 so launchd doesn't keep retrying. On success runs the
-# weekly plan generator (old `daytrader weekly run --ai` system, which
-# is the live working weekly pipeline; new `reports run --type weekly`
-# is a Phase 5 stub).
+# Runs preflight check with --no-tws (the weekly pipeline is yfinance-only
+# and never talks to TWS, so it only needs the claude CLI + config files;
+# gating on TWS lost 18 of 26 Sunday runs May-Oct 2026). On failure sends
+# a notification (best-effort) and exits 0 so launchd doesn't keep
+# retrying. On success runs the weekly plan generator (old
+# `daytrader weekly run --ai` system, which is the live working weekly
+# pipeline; new `reports run --type weekly` is a Phase 5 stub).
 #
 # When Phase 5 lands the new weekly path, swap the invocation to:
 #   uv run daytrader reports run --type weekly --no-pdf
@@ -47,10 +49,10 @@ echo "[run_weekly_launchd] start $(date -Iseconds)"
 echo "[run_weekly_launchd] PATH=$PATH"
 echo "[run_weekly_launchd] PWD=$PROJECT_ROOT"
 
-# Preflight check (TWS port + claude CLI + config files)
-if ! uv run python scripts/preflight_check.py --silent; then
+# Preflight check (claude CLI + config files; TWS skipped — weekly is yfinance-only)
+if ! uv run python scripts/preflight_check.py --no-tws --silent; then
     echo "[run_weekly_launchd] PREFLIGHT FAILED — send notification and exit"
-    osascript -e 'display notification "Weekly preflight failed at Sunday 14:00 PT — TWS / claude / config issue" with title "DayTrader Weekly" sound name "Submarine"' 2>/dev/null || true
+    osascript -e 'display notification "Weekly preflight failed at Sunday 14:00 PT — claude CLI / config issue" with title "DayTrader Weekly" sound name "Submarine"' 2>/dev/null || true
     # Telegram notification (preflight-failure escalation, 2026-05-07)
     uv run python "$PROJECT_ROOT/scripts/notify_preflight_failure.py" "weekly" "Sunday 14:00 PT" 2>/dev/null || true
     exit 0

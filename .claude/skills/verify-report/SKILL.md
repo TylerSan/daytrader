@@ -20,6 +20,9 @@ launchd 看不出失败（preflight 失败时 wrapper 仍 `exit 0`），Telegram
 2. Obsidian vault 里的目标文件存在且非空（> 500 bytes）。
 3. wrapper 日志 `data/logs/launchd/<type>-YYYYMMDD-HHMMSS.log` 里有
    `preflight ok, invoking` 和 `run exit=0`，且没有 `PREFLIGHT FAILED` / `Report FAILED`。
+   例外：yfinance 降级运行（TWS 不可达）没有 `preflight ok`，而是
+   `PREFLIGHT FAILED (TWS only) — degrading to --source yfinance` + `run exit=0`，
+   算**降级成功**，验收见 §2 (h)。
 
 **Telegram 送达今天无法验证**：`TelegramPusher.push` 吞掉异常返回
 `PushResult(success=False)`，orchestrator 丢弃返回值，`reports.telegram_msg_ids` 从不写入。
@@ -55,9 +58,11 @@ uv run python scripts/verify_report.py --type <X> --strict             # WARN �
 默认日期＝orchestrator 会用的日期键：premarket/4h/eod 取 **ET 今天**，night/asia 取
 **PT 今天**，weekly 取最近一个周日（本地）。
 
-8 项检查：`state_db_row`、`output_file`、`latest_run_log`、`telegram`、
+9 项检查：`state_db_row`、`output_file`、`latest_run_log`、`telegram`、
 `futures_not_etf`（启发式）、`session_sections`（仅 premarket，WARN 不 FAIL）、
-`language`（CJK 比例，阈值 0.15）、`required_sections`（复用 output_validator）。
+`language`（CJK 比例，阈值 0.15）、`required_sections`（复用 output_validator）、
+`data_source`（报告正文 `数据源：yfinance` 页脚 vs `state.db` `reports.data_source` 列；
+两者一致＝PASS 并打印来源，矛盾＝WARN，无文件且列为空＝SKIP）。
 末行 `VERDICT: PASS|WARN|FAIL`。退出码：0＝PASS（或无 `--strict` 的 WARN），
 1＝FAIL，2＝报告文件根本找不到。
 
@@ -106,8 +111,9 @@ uv run daytrader weekly run --ai                  # weekly 不需要 TWS（yfina
 
 只补当天已错过的时段；每跑完一个就用 (b) 验收再跑下一个。直接调 CLI 会绕过 preflight
 （preflight 只在 wrapper 里），所以先手动跑一次 preflight。补跑内容反映**运行时刻**的数据
-（orchestrator 用 `run_at=now`），不是原定时段的快照。没有 yfinance / databento 备用数据源——
-reports 代码里 IB 是唯一来源，TWS 不起来就没有办法。
+（orchestrator 用 `run_at=now`），不是原定时段的快照。TWS 起不来时可用
+`uv run daytrader reports run --type <X> --no-pdf --source yfinance` 降级补跑
+（延迟约 15 分钟，无 OI / 合约链；wrapper 在 TWS-only preflight 失败时会自动这样做）。
 
 **(g) 强制重新生成（破坏性，必须先征得用户同意）**
 
@@ -122,6 +128,19 @@ sqlite3 data/state.db "DELETE FROM reports WHERE report_type='asia' AND date='20
 （先 `SELECT id, report_type, date, status, obsidian_path FROM reports WHERE ...;`）。
 CLI 只能生成"今天"日期键的报告；重生成过去日期需要临时 Python 调
 `Orchestrator.run_<cadence>(run_at=<原定 UTC 时刻>)`（仓库里没有现成脚本）。
+
+**(h) 验收一次 yfinance 降级运行**
+
+wrapper 日志依次出现 `[preflight] ✗ TWS ...`、
+`PREFLIGHT FAILED (TWS only) — degrading to --source yfinance`、
+`[reports] data source: yfinance (--source yfinance)`（手动 `--source auto` 且 IB 不可达时是
+`[reports] data source: yfinance (IB unreachable)`），最后 `reports run exit=0`；
+`diagnose_preflight.py` 记为 `SUCCESS_DEGRADED_YFINANCE`（非零退出记为 `DEGRADED_YFINANCE_FAILED`，
+不算 `PREFLIGHT_TWS_*`）。然后照常跑 (b)：state.db 行和 vault 文件都应存在，报告末尾应有
+`数据源：yfinance（延迟约 15 分钟；OI 与合约链不可用）`，有 Telegram 的类型推送带 `[yfinance 降级]` 前缀；
+Telegram 里另有一条 `ℹ️ DayTrader: TWS 不可达，已用 yfinance 降级生成` 告警（`--degraded`）。
+期货点位抽查照旧（yfinance 用 `ES=F` 等连续合约，仍应是期货量级）。降级报告已写 success 行，
+想用 IB 数据重跑必须走 (g)。
 
 ## 3. Feature map（每类报告）
 
@@ -138,6 +157,11 @@ CLI 只能生成"今天"日期键的报告；重生成过去日期需要临时 P
   （前面常有 `positions request timed out` / `open orders request timed out`）；
   少见：`TWS API not responsive: connect() returned but isConnected() is False`、
   `[preflight] ✗ claude CLI not found on PATH`、`[preflight] ✗ config: missing ...`。
+  旧 wrapper 的结尾是 `PREFLIGHT FAILED — notify and exit 0`（报告丢失）。
+- yfinance 降级签名（2026-10-29 起，仅 TWS 失败时；claude/config 失败仍走旧路径）：
+  `PREFLIGHT FAILED (TWS only) — degrading to --source yfinance`；
+  `[reports] data source: yfinance (--source yfinance)` / `[reports] data source: yfinance (IB unreachable)`；
+  报告页脚 `数据源：yfinance（延迟约 15 分钟；OI 与合约链不可用）`；Telegram 前缀 `[yfinance 降级]`。
 - 良性噪声（不是失败）：`Error 321, reqId`、`[futures_section] WARNING: get_open_interest`、
   `[ib_client] WARNING: requested`、`findfont:`、`$ES=F: possibly delisted`。
 
@@ -290,10 +314,10 @@ state.db 最后的 success 行是 2026-10-09（id 95-98）。
 | Telegram 推送结果被吞 | `src/daytrader/reports/delivery/telegram_pusher.py:110-111`（`except` → `PushResult(success=False)`）；orchestrator 丢弃返回值；`telegram_msg_ids` 从不写 | 送达只能肉眼确认 |
 | `claude -p` stdout 被丢 | `src/daytrader/reports/core/ai_analyst.py:67-99`（非零退出只记 stderr） | 永远是 `claude -p exit=1: no stderr`，无法知道真实原因 |
 | dry-run 是 stub | `src/daytrader/cli/reports.py`（`dry_run`，7 行固定 echo） | 不证明管线健康 |
-| 没有数据源备用 | `src/daytrader/reports`、`src/daytrader/core` 无 yfinance/databento | TWS 不在就无报告 |
-| preflight 失败 exit 0 | `scripts/run_*_launchd.sh`（`PREFLIGHT FAILED` 后 `exit 0`） | `launchctl list` 看不出失败 |
+| yfinance 降级数据较差 | `reports run --source yfinance`（wrapper 在 TWS-only preflight 失败时自动使用） | 延迟约 15 分钟、无 OI / 合约链；报告"成功"但不是 IB 质量 |
+| preflight 失败 exit 0 | `scripts/run_*_launchd.sh`（claude/config 失败：`PREFLIGHT FAILED` 后 `exit 0`；TWS-only 失败改为降级，exit 码＝降级运行的 exit） | claude/config 失败时 `launchctl list` 看不出失败 |
 | 告警脚本 stderr 丢弃 | `scripts/run_*_launchd.sh`：`notify_preflight_failure.py ... 2>/dev/null` | 告警失败无痕迹，只能看有没有 `Telegram OK msg_id` |
-| weekly 被 TWS 卡住 | `scripts/run_weekly_launchd.sh:51`（跑 TWS preflight，但 weekly 只用 yfinance） | TWS 不在时 weekly 白白失败 |
+| weekly 曾被 TWS 卡住（2026-10-29 已改） | `scripts/run_weekly_launchd.sh` 现用 `preflight_check.py --no-tws`（只查 claude + config） | 旧日志里 weekly 的 TWS preflight 失败是历史遗留，不再复现 |
 | validator 只做子串匹配 | `src/daytrader/reports/core/output_validator.py`（`_slot_matches`） | 不查点位量级、中文比例、亚盘/欧盘 |
 | preflight 端口写死 | `scripts/preflight_check.py`（`--tws-port` 默认 7496，wrapper 不传；不读 `reports.ib.port`） | 切到 IB Gateway 4002 后 preflight 会误报 |
 | futures_not_etf 是启发式 | `scripts/verify_report.py` | 只看 ES/NQ/GC 行及其标题下的 3-6 位数；WARN 时读原文 |

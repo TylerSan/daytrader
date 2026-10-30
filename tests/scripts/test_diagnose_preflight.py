@@ -176,6 +176,45 @@ LOG_NOISE_ONLY_FAIL = hdr("eod") + (
     "something completely different went wrong\n"
 ) + end("eod", 1)
 
+# yfinance-degraded runs (wrappers since 2026-10-29): TWS-only preflight failure,
+# then `reports run --source yfinance`.
+DEGRADED_LINE = "[run_asia_launchd] PREFLIGHT FAILED (TWS only) — degrading to --source yfinance\n"
+
+LOG_DEGRADED_OK = hdr("asia", "2026-10-29T23:00:03-07:00") + (
+    "[preflight] ✗ TWS port unreachable at 127.0.0.1:7496\n"
+    + DEGRADED_LINE +
+    "[notify_preflight] Telegram OK msg_id=6400\n"
+    "[reports] data source: yfinance (--source yfinance)\n"
+    "$ES=F: possibly delisted; no price data found  (period=1d)\n"
+    "Report generated: /Users/x/Vault/Daily/2026-10-29-2300PT-asia.md\n"
+) + end("asia", 0)
+
+LOG_DEGRADED_FAIL = hdr("asia", "2026-10-29T23:00:03-07:00") + (
+    "[preflight] ✗ TWS API not responsive: API handshake failed: TimeoutError: \n"
+    + DEGRADED_LINE +
+    "[reports] data source: yfinance (--source yfinance)\n"
+    "Report FAILED: RuntimeError: AI call failed: claude -p exit=1: no stderr\n"
+) + end("asia", 1)
+
+LOG_DEGRADED_UNKNOWN_FAIL = hdr("asia", "2026-10-29T23:00:03-07:00") + (
+    "[preflight] ✗ TWS port unreachable at 127.0.0.1:7496\n"
+    + DEGRADED_LINE +
+    "Report FAILED: ValueError: yfinance returned no rows for ES=F\n"
+) + end("asia", 1)
+
+LOG_DEGRADED_SKIP = hdr("asia", "2026-10-29T23:00:03-07:00") + (
+    "[preflight] ✗ TWS port unreachable at 127.0.0.1:7496\n"
+    + DEGRADED_LINE +
+    "Report already generated today (skipped).\n"
+) + end("asia", 0)
+
+# Old-style wrapper log (pre-degrade): must stay a TWS preflight failure.
+LOG_OLD_STYLE_PORT = hdr("asia", "2026-10-28T23:00:03-07:00") + (
+    "[preflight] ✗ TWS port unreachable at 127.0.0.1:7496\n"
+    "[run_asia_launchd] PREFLIGHT FAILED — notify and exit 0\n"
+    "[notify_preflight] Telegram OK msg_id=6357\n"
+)
+
 
 @pytest.mark.parametrize(
     "text, category, cadence",
@@ -196,6 +235,11 @@ LOG_NOISE_ONLY_FAIL = hdr("eod") + (
         (LOG_TELEGRAM, "TELEGRAM_DELIVERY", "asia"),
         (LOG_INTERRUPTED, "INTERRUPTED", "eod"),
         (LOG_NOISE_ONLY_FAIL, "UNKNOWN", "eod"),
+        (LOG_DEGRADED_OK, "SUCCESS_DEGRADED_YFINANCE", "asia"),
+        (LOG_DEGRADED_FAIL, "DEGRADED_YFINANCE_FAILED", "asia"),
+        (LOG_DEGRADED_UNKNOWN_FAIL, "DEGRADED_YFINANCE_FAILED", "asia"),
+        (LOG_DEGRADED_SKIP, "IDEMPOTENT_SKIP", "asia"),
+        (LOG_OLD_STYLE_PORT, "PREFLIGHT_TWS_PORT", "asia"),
     ],
 )
 def test_classify_categories(text, category, cadence):
@@ -249,6 +293,64 @@ def test_empty_log_is_interrupted():
     d = dp.classify_log("")
     assert d.category == "INTERRUPTED"
     assert d.cadence is None
+
+
+def test_degraded_ok_fields_and_ok_set():
+    d = dp.classify_log(LOG_DEGRADED_OK)
+    assert d.degraded is True
+    assert d.exit_code == 0
+    assert d.escalation_sent is True
+    assert d.report_path == "/Users/x/Vault/Daily/2026-10-29-2300PT-asia.md"
+    assert any("degrading to --source yfinance" in e for e in d.evidence)
+    assert d.category in dp.OK_CATEGORIES
+    assert d.category not in dp.PREFLIGHT_TWS_CATEGORIES
+
+
+def test_degraded_failed_keeps_cause_in_evidence():
+    d = dp.classify_log(LOG_DEGRADED_FAIL)
+    assert d.degraded is True
+    assert d.exit_code == 1
+    assert d.category not in dp.OK_CATEGORIES
+    assert d.category not in dp.PREFLIGHT_TWS_CATEGORIES
+    assert any("degrading to --source yfinance" in e for e in d.evidence)
+    assert any("AI call failed: claude -p" in e for e in d.evidence)
+
+
+def test_old_style_log_is_not_degraded():
+    d = dp.classify_log(LOG_OLD_STYLE_PORT)
+    assert d.category == "PREFLIGHT_TWS_PORT"
+    assert d.degraded is False
+    assert d.exit_code is None
+    assert d.escalation_sent is True
+
+
+def test_rec_degraded():
+    root = Path("/r")
+    rec = "\n".join(dp.build_recommendation(
+        dp.classify_log(LOG_DEGRADED_OK), None, None, NOON, project_root=root))
+    assert "yfinance" in rec and "Nothing lost" in rec
+    assert "2026-10-29-2300PT-asia.md" in rec
+    rec = "\n".join(dp.build_recommendation(
+        dp.classify_log(LOG_DEGRADED_FAIL), False, False, NOON, project_root=root))
+    assert "fallback run also failed (exit 1)" in rec
+    assert "--type asia --no-pdf --source yfinance" in rec
+    rec = "\n".join(dp.build_recommendation(
+        dp.classify_log(LOG_DEGRADED_FAIL), True, False, NOON, project_root=root))
+    assert "Catch-up: " in rec and "--source yfinance" not in rec.split("Catch-up: ", 1)[1]
+
+
+def test_summary_degraded_not_counted_as_preflight(tmp_path):
+    _write(tmp_path, "asia-20261028-230003.log", LOG_OLD_STYLE_PORT)
+    _write(tmp_path, "asia-20261029-230003.log", LOG_DEGRADED_OK)
+    _write(tmp_path, "night-20261029-190003.log", LOG_DEGRADED_FAIL)
+    logs = dp.find_run_logs(tmp_path)
+    total, _, no_esc = dp.summarize(logs)
+    assert total["PREFLIGHT_TWS_PORT"] == 1
+    assert total["SUCCESS_DEGRADED_YFINANCE"] == 1
+    assert total["DEGRADED_YFINANCE_FAILED"] == 1
+    assert no_esc == 0
+    out = dp.render_summary(logs)
+    assert "yfinance-degraded runs (TWS down, not lost): 2 (ok=1, failed=1)" in out
 
 
 # ---------------------------------------------------------------------------
@@ -336,8 +438,11 @@ def test_rec_tws_down():
     joined = "\n".join(rec)
     assert "TWS is still down at 127.0.0.1:7496" in joined
     assert "2FA" in joined
-    assert dp.NO_FALLBACK_LINE in rec
-    assert "reports run --type" not in joined
+    assert dp.YFINANCE_FALLBACK_LINE in rec
+    assert "No databento/yfinance fallback" not in joined
+    # no IB catch-up while TWS is down; only the yfinance one
+    assert "reports run --type intraday-4h-2 --no-pdf --source yfinance" in joined
+    assert "Catch-up:" not in joined
 
 
 def test_rec_already_recovered():
@@ -440,7 +545,8 @@ def test_cli_last_failed_json(log_dir):
     assert data["diagnosis"]["escalation_sent"] is True
     assert data["live"]["tws_up_now"] is None
     assert data["ok"] is False
-    assert any("No databento/yfinance fallback" in r_ for r_ in data["recommendation"])
+    assert any("--source yfinance" in r_ for r_ in data["recommendation"])
+    assert not any("No databento/yfinance fallback" in r_ for r_ in data["recommendation"])
 
 
 def test_cli_cadence_and_explicit_log(log_dir):

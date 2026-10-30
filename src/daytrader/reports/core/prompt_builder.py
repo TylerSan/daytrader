@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from daytrader.core.ib_client import OHLCV
 from daytrader.reports.core.context_loader import ContractStatus, ReportContext
+from daytrader.reports.core.data_source import DATA_SOURCE_NOTE_YF
 from daytrader.reports.templates import load_template
 
 if TYPE_CHECKING:
@@ -19,6 +20,12 @@ if TYPE_CHECKING:
 
 class PromptBuilder:
     """Assemble Anthropic Messages API prompts."""
+
+    def __init__(self, data_source: str = "ib") -> None:
+        # "ib" (default) or a fallback source such as "yfinance". When not
+        # "ib", the bar-data block carries a provenance note the AI is asked
+        # to echo into the report's data snapshot.
+        self.data_source = data_source
 
     def build_premarket(
         self,
@@ -52,7 +59,9 @@ class PromptBuilder:
         ]
 
         lock_in_block = self._build_lock_in_block(context)
-        bars_block = self._build_multi_symbol_bars_block(bars_by_symbol_and_tf)
+        bars_block = self._build_multi_symbol_bars_block(
+            bars_by_symbol_and_tf, data_source=self.data_source
+        )
         futures_block = self._build_futures_section_block(futures_data)
         news_block = self._build_news_block(news_items)
         tradable_block = (
@@ -132,7 +141,9 @@ class PromptBuilder:
         ]
 
         lock_in_block = self._build_lock_in_block(context)
-        bars_block = self._build_multi_symbol_bars_block(bars_by_symbol_and_tf)
+        bars_block = self._build_multi_symbol_bars_block(
+            bars_by_symbol_and_tf, data_source=self.data_source
+        )
         futures_block = self._build_futures_section_block(futures_data)
         news_block = self._build_news_block(news_items)
         tradable_block = (
@@ -247,7 +258,9 @@ class PromptBuilder:
         ]
 
         lock_in_block = self._build_lock_in_block(context)
-        bars_block = self._build_multi_symbol_bars_block(bars_by_symbol_and_tf)
+        bars_block = self._build_multi_symbol_bars_block(
+            bars_by_symbol_and_tf, data_source=self.data_source
+        )
         futures_block = self._build_futures_section_block(futures_data)
         news_block = self._build_news_block(news_items)
         tradable_block = (
@@ -373,7 +386,9 @@ class PromptBuilder:
         ]
 
         lock_in_block = self._build_lock_in_block(context)
-        bars_block = self._build_multi_symbol_bars_block(bars_by_symbol_and_tf)
+        bars_block = self._build_multi_symbol_bars_block(
+            bars_by_symbol_and_tf, data_source=self.data_source
+        )
         futures_block = self._build_futures_section_block(futures_data)
         news_block = self._build_news_block(news_items)
 
@@ -418,8 +433,14 @@ class PromptBuilder:
     @staticmethod
     def _build_multi_symbol_bars_block(
         bars_by_symbol_and_tf: dict[str, dict[str, list[OHLCV]]],
+        *,
+        data_source: str = "ib",
     ) -> str:
         """Format per-symbol multi-TF bar data.
+
+        When ``data_source`` is not ``"ib"`` (e.g. the yfinance fallback),
+        a provenance line is inserted directly under the header asking the
+        AI to state the data source verbatim in the report's data snapshot.
 
         Renders only TFs that are KEYS in the per-symbol dict — empty list
         is still rendered (with "(no bars available)" placeholder, since
@@ -434,6 +455,11 @@ class PromptBuilder:
         14:00 PT EOD auto-fire.
         """
         lines = ["## Multi-TF bar data (per instrument)"]
+        if data_source != "ib":
+            lines.append(
+                DATA_SOURCE_NOTE_YF
+                + "——请在报告的数据快照/说明处原文注明这一行。"
+            )
         for symbol in bars_by_symbol_and_tf:
             lines.append(f"\n### Symbol: {symbol}")
             tfs = bars_by_symbol_and_tf[symbol]

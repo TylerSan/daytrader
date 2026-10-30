@@ -18,6 +18,7 @@ from daytrader.core.ib_client import IBClient
 from daytrader.core.state import StateDB
 from daytrader.reports.core.ai_analyst import AIAnalyst
 from daytrader.reports.core.context_loader import ContextLoader
+from daytrader.reports.core.data_source import DATA_SOURCE_NOTE_YF
 from daytrader.reports.core.plan_extractor import PlanExtractor
 from daytrader.reports.delivery.obsidian_writer import ObsidianWriter
 from daytrader.reports.sentiment import SentimentSection
@@ -55,6 +56,7 @@ class Orchestrator:
         chart_renderer=None,        # ChartRenderer | None
         pdf_renderer=None,          # PDFRenderer | None
         telegram_pusher=None,       # TelegramPusher | None
+        data_source: str = "ib",    # "ib" | "yfinance" (fallback)
     ) -> None:
         if symbols is None:
             symbols = ["MES"]
@@ -73,6 +75,23 @@ class Orchestrator:
         self.chart_renderer = chart_renderer
         self.pdf_renderer = pdf_renderer
         self.telegram_pusher = telegram_pusher
+        self.data_source = data_source
+
+    # --- data-source provenance helpers ---
+
+    def _annotate_report_text(self, text: str) -> str:
+        """Append a deterministic data-source footer for non-IB runs so
+        downstream verification does not depend on the AI echoing the
+        prompt note. IB runs are returned unchanged."""
+        if self.data_source == "ib":
+            return text
+        return text + "\n\n---\n" + DATA_SOURCE_NOTE_YF + "\n"
+
+    def _telegram_messages(self, text: str) -> list[str]:
+        """Telegram text payload; non-IB runs get a visible prefix."""
+        if self.data_source == "ib":
+            return [text]
+        return [f"[{self.data_source} 降级] " + text]
 
     def run_premarket(self, run_at: datetime) -> PipelineResult:
         """Execute one premarket pipeline run."""
@@ -98,6 +117,7 @@ class Orchestrator:
             time_et=time_et_str,
             status="pending",
             created_at=run_at_utc,
+            data_source=self.data_source,
         )
 
         start = time.perf_counter()
@@ -139,6 +159,7 @@ class Orchestrator:
                 tradable_symbols=self.tradable_symbols,
                 underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
                 term_price_fetcher=TermPricesFetcher(self.ib_client),
+                data_source=self.data_source,
             )
             outcome = generator.generate(
                 context=context,
@@ -166,6 +187,7 @@ class Orchestrator:
                 )
 
             # Write to Obsidian first to capture the report path for plan rows
+            report_text = self._annotate_report_text(outcome.report_text)
             writer = ObsidianWriter(
                 vault_root=self.vault_root,
                 fallback_dir=self.fallback_dir,
@@ -173,7 +195,7 @@ class Orchestrator:
             )
             write_result = writer.write_premarket(
                 date_iso=date_et,
-                content=outcome.report_text,
+                content=report_text,
             )
 
             # Persist per-tradable plans
@@ -214,7 +236,7 @@ class Orchestrator:
             if self.pdf_renderer is not None:
                 try:
                     pdf_path = self.pdf_renderer.render_to_pdf(
-                        markdown_text=outcome.report_text,
+                        markdown_text=report_text,
                         title=f"Premarket {date_et}",
                         filename_stem=f"{date_et}-premarket",
                     )
@@ -226,7 +248,7 @@ class Orchestrator:
                 try:
                     import asyncio
                     asyncio.run(self.telegram_pusher.push(
-                        text_messages=[outcome.report_text],
+                        text_messages=self._telegram_messages(report_text),
                         chart_paths=chart_paths,
                         pdf_path=pdf_path,
                     ))
@@ -327,6 +349,7 @@ class Orchestrator:
             time_et=time_et_str,
             status="pending",
             created_at=run_at_utc,
+            data_source=self.data_source,
         )
 
         start = time.perf_counter()
@@ -395,6 +418,7 @@ class Orchestrator:
                 tradable_symbols=self.tradable_symbols,
                 underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
                 term_price_fetcher=TermPricesFetcher(self.ib_client),
+                data_source=self.data_source,
                 plan_reader=plan_reader,
                 plan_parser=plan_parser,
                 trades_query=trades_query,
@@ -446,6 +470,7 @@ class Orchestrator:
                 )
 
             # Write to Obsidian (EOD: Daily/<date>-eod.md).
+            report_text = self._annotate_report_text(outcome.report_text)
             writer = ObsidianWriter(
                 vault_root=self.vault_root,
                 fallback_dir=self.fallback_dir,
@@ -453,7 +478,7 @@ class Orchestrator:
             )
             write_result = writer.write_eod(
                 date_iso=date_et,
-                content=outcome.report_text,
+                content=report_text,
             )
 
             # NOTE: EOD's C section is retrospective (plan vs PA review for the
@@ -482,7 +507,7 @@ class Orchestrator:
             if self.pdf_renderer is not None:
                 try:
                     pdf_path = self.pdf_renderer.render_to_pdf(
-                        markdown_text=outcome.report_text,
+                        markdown_text=report_text,
                         title=f"EOD {date_et}",
                         filename_stem=f"{date_et}-eod",
                     )
@@ -497,7 +522,7 @@ class Orchestrator:
                 try:
                     import asyncio
                     asyncio.run(self.telegram_pusher.push(
-                        text_messages=[outcome.report_text],
+                        text_messages=self._telegram_messages(report_text),
                         chart_paths=chart_paths,
                         pdf_path=pdf_path,
                     ))
@@ -627,6 +652,7 @@ class Orchestrator:
             time_et=time_et_str,
             status="pending",
             created_at=run_at_utc,
+            data_source=self.data_source,
         )
 
         try:
@@ -681,6 +707,7 @@ class Orchestrator:
                 tradable_symbols=self.tradable_symbols,
                 underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
                 term_price_fetcher=TermPricesFetcher(self.ib_client),
+                data_source=self.data_source,
                 plan_reader=plan_reader,
                 plan_parser=plan_parser,
                 trades_query=trades_query,
@@ -723,6 +750,7 @@ class Orchestrator:
                     ),
                 )
 
+            report_text = self._annotate_report_text(outcome.report_text)
             writer = ObsidianWriter(
                 vault_root=self.vault_root,
                 fallback_dir=self.fallback_dir,
@@ -731,7 +759,7 @@ class Orchestrator:
             write_result = writer.write_intraday_4h(
                 date_iso=date_et,
                 time_label=time_label,
-                content=outcome.report_text,
+                content=report_text,
             )
 
             # Best-effort delivery: charts, PDF, Telegram
@@ -753,7 +781,7 @@ class Orchestrator:
             if self.pdf_renderer is not None:
                 try:
                     pdf_path = self.pdf_renderer.render_to_pdf(
-                        markdown_text=outcome.report_text,
+                        markdown_text=report_text,
                         title=f"{config.cadence_label} {date_et}",
                         filename_stem=f"{date_et}-{time_label}",
                     )
@@ -767,7 +795,7 @@ class Orchestrator:
                 try:
                     import asyncio
                     asyncio.run(self.telegram_pusher.push(
-                        text_messages=[outcome.report_text],
+                        text_messages=self._telegram_messages(report_text),
                         chart_paths=chart_paths,
                         pdf_path=pdf_path,
                     ))
@@ -885,6 +913,7 @@ class Orchestrator:
             time_et=time_et_str,
             status="pending",
             created_at=run_at_utc,
+            data_source=self.data_source,
         )
 
         start = time.perf_counter()
@@ -910,6 +939,7 @@ class Orchestrator:
                 tradable_symbols=self.tradable_symbols,
                 underlying_price_fetcher=UnderlyingPriceFetcher(self.ib_client),
                 term_price_fetcher=TermPricesFetcher(self.ib_client),
+                data_source=self.data_source,
             )
 
             outcome = generator.generate(
@@ -947,6 +977,7 @@ class Orchestrator:
                     ),
                 )
 
+            report_text = self._annotate_report_text(outcome.report_text)
             writer = ObsidianWriter(
                 vault_root=self.vault_root,
                 fallback_dir=self.fallback_dir,
@@ -955,7 +986,7 @@ class Orchestrator:
             write_result = writer.write_night_asia(
                 date_iso=date_et,
                 cadence=config.cadence_label,
-                content=outcome.report_text,
+                content=report_text,
             )
 
             # NO PDF, NO Telegram for night/asia per spec §2.2.

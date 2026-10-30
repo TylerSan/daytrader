@@ -86,10 +86,17 @@ class AIAnalyst:
                         model=self.model,
                         stop_reason="end_turn",
                     )
-                last_error = (
-                    f"claude -p exit={result.returncode}: "
-                    f"{result.stderr.strip() or 'no stderr'}"
-                )
+                # claude CLI prints some fatal errors on STDOUT (e.g.
+                # "Failed to authenticate: OAuth session expired and could
+                # not be refreshed"), while stderr only carries settings
+                # warnings. Capture both so the real cause is not lost
+                # (the historical "claude -p exit=1: no stderr" category).
+                stderr_tail = result.stderr.strip()[-400:]
+                stdout_tail = result.stdout.strip()[-400:]
+                detail = stderr_tail or "no stderr"
+                if stdout_tail:
+                    detail = f"{detail} | stdout: {stdout_tail}"
+                last_error = f"claude -p exit={result.returncode}: {detail}"
             except subprocess.TimeoutExpired:
                 last_error = f"claude -p timeout after {self.timeout_seconds}s"
 
