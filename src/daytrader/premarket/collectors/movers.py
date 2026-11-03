@@ -59,11 +59,18 @@ class MoversCollector(Collector):
             try:
                 ticker = yf.Ticker(symbol)
                 info = ticker.info
-                prev_close = info.get("regularMarketPreviousClose")
                 pre_price = info.get("preMarketPrice")
                 current = info.get("regularMarketPrice")
                 volume = info.get("regularMarketVolume", 0)
                 avg_volume = info.get("averageDailyVolume10Day", 1)
+
+                # Derive prev_close from history to avoid the stale
+                # regularMarketPreviousClose bug during early premarket.
+                ticker_hist = yf.Ticker(symbol).history(period="5d")
+                if len(ticker_hist) >= 2:
+                    prev_close = round(float(ticker_hist.iloc[-2]["Close"]), 2)
+                else:
+                    prev_close = info.get("regularMarketPreviousClose")
 
                 price = pre_price or current
                 if not price or not prev_close:
@@ -82,6 +89,7 @@ class MoversCollector(Collector):
                         "avg_volume": avg_volume,
                         "vol_ratio": round(vol_ratio, 2),
                         "name": info.get("shortName", symbol),
+                        "is_premarket": pre_price is not None,
                     })
             except Exception:
                 continue

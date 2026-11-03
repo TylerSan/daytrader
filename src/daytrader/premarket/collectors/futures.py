@@ -59,30 +59,37 @@ class FuturesCollector(Collector):
                 # Fetch intraday data for overnight session context
                 # 1m interval, last 1 day captures globex session
                 hist = ticker.history(period="1d", interval="1m")
-                if not hist.empty:
-                    entry["overnight_high"] = round(float(hist["High"].max()), 2)
-                    entry["overnight_low"] = round(float(hist["Low"].min()), 2)
-                    entry["overnight_range"] = round(
-                        entry["overnight_high"] - entry["overnight_low"], 2
-                    )
+                if not hist.empty and hasattr(hist.index, 'tz'):
+                    hours = hist.index.hour
+                    minutes = hist.index.minute
 
-                    # Split into approximate Asia (18:00-02:00 ET) and Europe (02:00-08:00 ET) sessions
-                    # yfinance returns times in exchange timezone
-                    if hasattr(hist.index, 'tz'):
-                        hours = hist.index.hour
-                        # Asia session approximation: entries with hour 18-23, 0-1
-                        asia_mask = (hours >= 18) | (hours <= 1)
-                        asia = hist[asia_mask]
-                        if not asia.empty:
-                            entry["asia_high"] = round(float(asia["High"].max()), 2)
-                            entry["asia_low"] = round(float(asia["Low"].min()), 2)
+                    # Pre-RTH filter: only bars before 09:30 ET.
+                    # This excludes regular-trading-hours bars so the
+                    # "overnight" range stays correct even when the
+                    # report is generated after the market opens.
+                    pre_rth_mask = (hours < 9) | ((hours == 9) & (minutes < 30))
+                    pre_rth = hist[pre_rth_mask]
 
-                        # Europe session approximation: entries with hour 2-7
-                        europe_mask = (hours >= 2) & (hours <= 7)
-                        europe = hist[europe_mask]
-                        if not europe.empty:
-                            entry["europe_high"] = round(float(europe["High"].max()), 2)
-                            entry["europe_low"] = round(float(europe["Low"].min()), 2)
+                    if not pre_rth.empty:
+                        entry["overnight_high"] = round(float(pre_rth["High"].max()), 2)
+                        entry["overnight_low"] = round(float(pre_rth["Low"].min()), 2)
+                        entry["overnight_range"] = round(
+                            entry["overnight_high"] - entry["overnight_low"], 2
+                        )
+
+                    # Asia session approximation: entries with hour 18-23, 0-1
+                    asia_mask = (hours >= 18) | (hours <= 1)
+                    asia = hist[asia_mask]
+                    if not asia.empty:
+                        entry["asia_high"] = round(float(asia["High"].max()), 2)
+                        entry["asia_low"] = round(float(asia["Low"].min()), 2)
+
+                    # Europe session approximation: entries with hour 2-7
+                    europe_mask = (hours >= 2) & (hours <= 7)
+                    europe = hist[europe_mask]
+                    if not europe.empty:
+                        entry["europe_high"] = round(float(europe["High"].max()), 2)
+                        entry["europe_low"] = round(float(europe["Low"].min()), 2)
 
                 result[symbol] = entry
             except Exception:

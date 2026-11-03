@@ -46,12 +46,24 @@ class LevelsCollector(Collector):
                 info = ticker.info
                 hist = ticker.history(period="5d")
 
-                levels = {
-                    "prior_day_high": info.get("regularMarketDayHigh"),
-                    "prior_day_low": info.get("regularMarketDayLow"),
-                    "prior_day_close": info.get("regularMarketPreviousClose"),
-                    "premarket_price": info.get("preMarketPrice"),
-                }
+                levels: dict = {}
+
+                # Prior day OHLC: always derive from the second-to-last
+                # daily bar in history.  ticker.info fields like
+                # regularMarketDayHigh flip to TODAY's value once RTH
+                # opens, and regularMarketPreviousClose can lag during
+                # early pre-market — history() is the only reliable source.
+                if len(hist) >= 2:
+                    prior = hist.iloc[-2]
+                    levels["prior_day_high"] = round(float(prior["High"]), 2)
+                    levels["prior_day_low"] = round(float(prior["Low"]), 2)
+                    levels["prior_day_close"] = round(float(prior["Close"]), 2)
+                else:
+                    levels["prior_day_high"] = info.get("regularMarketDayHigh")
+                    levels["prior_day_low"] = info.get("regularMarketDayLow")
+                    levels["prior_day_close"] = info.get("regularMarketPreviousClose")
+
+                levels["premarket_price"] = info.get("preMarketPrice")
 
                 if not hist.empty and "Volume" in hist.columns:
                     vol = hist["Volume"]
