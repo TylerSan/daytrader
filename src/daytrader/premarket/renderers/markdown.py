@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from daytrader.premarket.collectors.base import CollectorResult
+
+# Vancouver observes permanent daylight time (UTC-7); a fixed offset avoids tzdata's PST fallback.
+REPORT_TZ = timezone(timedelta(hours=-7), "PDT")
+REPORT_TZ_LABEL = "温哥华时间 (PDT)"
 
 
 def _wrap_callout(title: str, lines: list[str]) -> list[str]:
@@ -36,19 +40,19 @@ class MarkdownRenderer:
         card_images: list[Path] | None = None,
     ) -> str:
         sections: list[str] = []
-        now = datetime.now()
+        now = datetime.now(REPORT_TZ)
         has_cards = bool(card_images)
 
         # Obsidian-compatible YAML frontmatter
         sections.append("---")
         sections.append(f"date: {date.isoformat()}")
-        sections.append(f"generated: {now.strftime('%Y-%m-%dT%H:%M:%S')}")
+        sections.append(f"generated: {now.isoformat(timespec='seconds')}")
         sections.append("type: premarket")
         sections.append("tags: [trading, premarket, daily]")
         sections.append("---\n")
 
         sections.append(f"# 盘前分析报告 — {date.isoformat()}")
-        sections.append(f"*生成时间: {now.strftime('%H:%M:%S')} UTC*\n")
+        sections.append(f"*生成时间: {now.strftime('%H:%M:%S')} {REPORT_TZ_LABEL}*\n")
 
         # ═══════════════════════════════════════
         # 数据速览 (card image snapshot section)

@@ -13,7 +13,7 @@ from daytrader.premarket.analyzers.ai_analyst import (
 )
 from daytrader.premarket.collectors.base import CollectorResult, MarketDataCollector
 from daytrader.premarket.renderers.cards import CardGenerator
-from daytrader.premarket.renderers.markdown import _wrap_callout
+from daytrader.premarket.renderers.markdown import REPORT_TZ, REPORT_TZ_LABEL, _wrap_callout
 
 _log = logging.getLogger(__name__)
 
@@ -247,17 +247,17 @@ class WeeklyPlanGenerator:
         week_start: date,
         card_images: list[Path] | None = None,
     ) -> str:
-        now = datetime.now()
+        now = datetime.now(REPORT_TZ)
         has_cards = bool(card_images)
         sections = [
             "---",
             f"date: {week_start.isoformat()}",
-            f"generated: {now.strftime('%Y-%m-%dT%H:%M:%S')}",
+            f"generated: {now.isoformat(timespec='seconds')}",
             "type: weekly",
             "tags: [trading, weekly, plan]",
             "---\n",
             f"# 周度交易计划 — {week_start.isoformat()} 起\n",
-            f"*生成时间: {now.strftime('%Y-%m-%d %H:%M')} UTC*\n",
+            f"*生成时间: {now.strftime('%Y-%m-%d %H:%M')} {REPORT_TZ_LABEL}*\n",
         ]
 
         # 数据速览 (card image snapshot section)

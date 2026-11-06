@@ -141,3 +141,13 @@ def test_weekly_render_without_cards_no_folding(sample_results):
     report = gen._render_data(sample_results, date(2026, 4, 9))
     assert "> [!info]-" not in report
     assert "数据速览" not in report
+
+
+def test_weekly_generated_timestamp_uses_vancouver_permanent_dst(sample_results):
+    from daytrader.premarket.weekly import WeeklyPlanGenerator
+    gen = WeeklyPlanGenerator(collector=MagicMock(), output_dir="/tmp/test")
+    report = gen._render_data(sample_results, date(2026, 4, 9))
+    generated_line = next(line for line in report.splitlines() if line.startswith("generated: "))
+    assert generated_line.endswith("-07:00")
+    assert "温哥华时间 (PDT)" in report
+    assert " UTC*" not in report

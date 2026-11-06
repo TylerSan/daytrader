@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -57,6 +57,15 @@ def test_markdown_renderer_produces_report(sample_results):
     assert "VIX" in report or "^VIX" in report
     assert "Technology" in report
     assert "SPY" in report
+
+
+def test_generated_timestamp_uses_vancouver_permanent_dst(sample_results):
+    renderer = MarkdownRenderer()
+    report = renderer.render(sample_results, date=date(2026, 4, 9))
+    generated_line = next(line for line in report.splitlines() if line.startswith("generated: "))
+    assert generated_line.endswith("-07:00")
+    assert "温哥华时间 (PDT)" in report
+    assert " UTC*" not in report
 
 
 def test_markdown_renderer_saves_to_file(sample_results, tmp_dir):
