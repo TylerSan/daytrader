@@ -22,6 +22,10 @@ def _format_dict(data: dict, indent: int = 0) -> str:
     lines = []
     prefix = "  " * indent
     for k, v in data.items():
+        if k == "weekly_bars_8w":
+            # Skip — formatted separately by _format_weekly_bars to avoid
+            # a giant inline list polluting the today-snapshot section.
+            continue
         if isinstance(v, dict):
             lines.append(f"{prefix}{k}:")
             lines.append(_format_dict(v, indent + 1))
@@ -32,15 +36,76 @@ def _format_dict(data: dict, indent: int = 0) -> str:
     return "\n".join(lines)
 
 
+def _format_weekly_bars(futures_data: dict) -> str:
+    """Render `weekly_bars_8w` lists from futures collector into a compact
+    table per symbol. Used by the weekly AI prompt's "上周回顾" section.
+
+    Returns "(no weekly bars data)" if nothing populated — the AI prompt
+    should fall back to disclosing the gap rather than reverse-engineering
+    from a single day.
+    """
+    if not futures_data:
+        return "(no weekly bars data)"
+    lines: list[str] = []
+    for symbol, entry in futures_data.items():
+        if not isinstance(entry, dict):
+            continue
+        bars = entry.get("weekly_bars_8w") or []
+        if not bars:
+            continue
+        lines.append(f"\n**{symbol}** — past {len(bars)} weeks:")
+        lines.append("| Week ending | Open | High | Low | Close | Δ% vs prev close |")
+        lines.append("|---|---|---|---|---|---|")
+        prev_close: float | None = None
+        for b in bars:
+            close = b["close"]
+            chg = ""
+            if prev_close is not None and prev_close != 0:
+                pct = (close - prev_close) / prev_close * 100
+                chg = f"{pct:+.2f}%"
+            lines.append(
+                f"| {b['week_end']} | {b['open']:.2f} | {b['high']:.2f} | "
+                f"{b['low']:.2f} | {close:.2f} | {chg} |"
+            )
+            prev_close = close
+    return "\n".join(lines) if lines else "(no weekly bars data)"
+
+
 _WEEKLY_AI_PROMPT = """\
 你是一位顶级交易计划分析师。请基于以下市场数据，为本周（{week_start}起）生成完整的周度交易计划。
 
-## 本周市场数据
+# 重要 — 本次任务必须使用 web search 工具核实下列信息（不许凭训练数据猜）
 
-### 期货 & VIX
+1. **真实经济日历**：搜索本周（{week_start} 至本周五）美国 BLS / BEA / Fed
+   将要发布的经济数据 + Fed 官员讲话日程。
+   - 关键词建议：`"BLS calendar {week_start_month} 2026"`,
+     `"Federal Reserve speech schedule {week_start_month} 2026"`,
+     `"Trading Economics United States calendar {week_start}"`.
+   - 必须给出**确切的日期 + 时间（ET）**，不许写"周X 早盘"这种泛指。
+   - 如果搜索后仍不确定具体时间，用"未确认"标注，不要编造。
+
+2. **真实板块过去 5 个交易日表现**：搜索 SPDR 板块 ETF
+   （XLK / XLF / XLE / XLV / XLY / XLI / XLP / XLRE / XLU / XLB / XLC）
+   过去 5 个交易日的涨跌幅。下面 `{{sector_data}}` 块只有当日 snapshot，
+   不足以做"板块轮动"判断 —— web search 找过去一周的真实数据再给结论。
+
+3. **关键宏观事件**：搜索过去 7 天 + 未来 7 天的 Fed 官员表态、地缘事件、
+   主要财报。以真实新闻为基础，不许凭习惯认为"通常此时段会有 X 事件"。
+
+完成搜索后，所有"上周回顾 / 经济日历 / 板块轮动"段落必须**至少引用 3 个真实搜到的 URL**，
+URL 列在最后的 Sources 段。
+
+---
+
+## 本周市场数据（今日 snapshot + 真实过去 8 周 weekly OHLCV）
+
+### 期货 & VIX — 今日 snapshot（用于"当前位置"判断）
 {futures_data}
 
-### 板块表现
+### 真实过去 8 周 weekly OHLCV — 用于"上周回顾"，**不要从单日反推**
+{weekly_bars_data}
+
+### 板块表现 — 注意：仅当日 snapshot，如需"板块轮动"必须 web search 过去 5 日
 {sector_data}
 
 ### 关键价位
@@ -50,19 +115,19 @@ _WEEKLY_AI_PROMPT = """\
 
 请按以下结构生成完整周计划：
 
-## 一、上周回顾
+## 一、上周回顾（基于上面"真实过去 8 周 weekly OHLCV"，不许从单日反推）
 
-（基于当前市场位置推断上周走势）
-- 上周主要指数表现总结
-- 板块轮动特征
-- 关键事件回顾（伊朗局势、Fed政策等）
+- 上周（最末一根 weekly bar）主要指数 OHLC + 涨跌幅
+- 过去 4 周的方向性（连阳？连阴？震荡？）
+- 板块轮动特征（**必须基于 web search 的过去 5 日板块数据**）
+- 关键事件回顾（伊朗局势、Fed政策等 — 用 web search 核实）
 - 本周需要延续关注的主题
 
 ## 二、本周宏观展望
 
-### 经济日历
-- 列出本周重要经济数据发布时间（CPI、PPI、初请、零售销售、FOMC纪要等）
-- 标注具体日期和时间（ET）
+### 经济日历（必须 web search 核实，不许凭训练数据猜测时间）
+- 列出本周实际公布的经济数据 + 时间（ET）—— 来自 BLS/BEA/Trading Economics 真实搜索
+- 标注 high-impact / medium-impact / low-impact
 - 评估各数据对市场的预期影响
 
 ### 市场结构分析
@@ -105,6 +170,23 @@ _WEEKLY_AI_PROMPT = """\
 - 交易纪律目标（如：每日最大交易次数）
 - 风控目标（如：单日最大亏损）
 - 改善目标（如：只在A+setup入场）
+
+## Sources（必填，最少 5 个真实搜到的 URL）
+
+- [URL1](URL1) — 用于支撑哪段判断
+- [URL2](URL2) — 用于支撑哪段判断
+- [URL3](URL3) — ...
+（继续列出所有引用的来源）
+
+---
+
+# 输出格式硬要求（不许压缩成 summary）
+
+1. **必须输出全部 4 个 section**（一、上周回顾 / 二、本周宏观展望 / 三、本周交易计划 / 四、本周个人目标）+ **Sources**。
+2. **每个 section 内的所有子标题（### 经济日历 / ### 市场结构分析 等）也必须出现**，每个子标题下至少 2-3 行实质内容。
+3. **总输出长度目标 2500-4000 字**，不能压缩成 4 段 executive summary。如果你觉得"已经讲完要点"，就再补充：周线技术结构（趋势线 / EMA / 关键 swing high/low）、板块轮动具体强弱排序、跨资产关系（DXY 与股指、美债收益率与黄金）。
+4. **Sources 段最少 5 个真实 URL**，每个 URL 要标注用于支撑哪一段（例如：`https://www.bls.gov/schedule/news_release/empsit.htm — 用于二、经济日历 NFP 时间确认`）。
+5. **直接输出 markdown 报告本体，不要 preamble**（不要写"好的，我来生成..." 这种开头）。
 """
 
 
@@ -361,8 +443,11 @@ class WeeklyPlanGenerator:
 
     def _build_prompt(self, results: dict[str, CollectorResult], week_start: date) -> str:
         futures_data = "No data"
+        weekly_bars_data = "(no weekly bars data)"
         if "futures" in results and results["futures"].success:
-            futures_data = _format_dict(results["futures"].data)
+            raw = results["futures"].data
+            futures_data = _format_dict(raw)
+            weekly_bars_data = _format_weekly_bars(raw)
 
         sector_data = "No data"
         if "sectors" in results and results["sectors"].success:
@@ -380,7 +465,9 @@ class WeeklyPlanGenerator:
 
         return _WEEKLY_AI_PROMPT.format(
             week_start=week_start.isoformat(),
+            week_start_month=week_start.strftime("%B %Y"),
             futures_data=futures_data,
+            weekly_bars_data=weekly_bars_data,
             sector_data=sector_data,
             levels_data=levels_data,
             vix=vix,

@@ -33,19 +33,23 @@ def test_fail_when_no_contract(repo):
     assert any("contract" in f.reason for f in res.failed_gates)
 
 
-def test_fail_when_no_verdict(repo):
+def test_pass_when_contract_active_no_verdict_no_dry_runs(repo):
+    """Handoff (b) discretionary: contract active, no sanity verdict, no
+    dry-runs — gate should PASS. Sanity-floor verdict and dry-run count
+    gates were removed because the locked setup is discretionary
+    order-flow and not amenable to mechanical sanity-floor validation
+    (per Phase 2 decision memo 2026-04-22, handoff (b))."""
     repo.save_contract(Contract(
         version=1, signed_date=date(2026, 4, 20), active=True,
         r_unit_usd=Decimal("50"),
         daily_loss_limit_r=3, daily_loss_warning_r=2,
         max_trades_per_day=5, stop_cooloff_minutes=30,
-        locked_setup_name="orb",
-        locked_setup_file="docs/trading/setups/orb.yaml",
+        locked_setup_name="stacked_imbalance_reversal_at_level",
+        locked_setup_file="docs/trading/setups/stacked_imbalance_reversal.yaml",
     ))
     svc = ResumeGateService(repo)
     res = svc.check()
-    assert res.passed is False
-    assert any("sanity" in f.reason.lower() for f in res.failed_gates)
+    assert res.passed is True, res.failed_gates
 
 
 def test_pass_when_all_green(repo, tmp_path):
