@@ -302,3 +302,70 @@ def test_weekly_wrapper_bash_syntax_ok():
         ["bash", "-n", str(WEEKLY_WRAPPER)], capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
+
+
+# ---------------------------------------------------------------------------
+# LLM backend = api (2026-11): claude CLI optional, API key required,
+# 1-token ping only behind --api-ping.
+# ---------------------------------------------------------------------------
+
+
+def test_api_backend_missing_claude_is_warning_only(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: False)
+    monkeypatch.setattr(module, "api_ping", lambda root: (_ for _ in ()).throw(
+        AssertionError("api_ping must not run without --api-ping")))
+    monkeypatch.setenv("DAYTRADER_LLM_BACKEND", "api")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--project-root", str(root))
+
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "claude CLI not found" not in captured.err  # wrappers grep this as fatal
+    assert "ignored (LLM backend=api)" in captured.err
+    assert "Anthropic API key present (env ANTHROPIC_API_KEY)" in captured.out
+    assert "test-key-not-real" not in captured.out + captured.err
+
+
+def test_api_backend_missing_key_fails(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: True)
+    monkeypatch.setenv("DAYTRADER_LLM_BACKEND", "api")
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--project-root", str(root))
+
+    assert rc == 1
+    assert "LLM API key missing" in capsys.readouterr().err
+
+
+def test_api_ping_opt_in(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: False)
+    pinged = []
+    monkeypatch.setattr(module, "api_ping", lambda root: (pinged.append(root) or (False, "AuthenticationError: bad")))
+    monkeypatch.setenv("DAYTRADER_LLM_BACKEND", "api")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--api-ping", "--project-root", str(root))
+
+    assert rc == 1 and len(pinged) == 1
+    assert "LLM API ping failed" in capsys.readouterr().err
+
+
+def test_cli_backend_missing_claude_still_fatal(monkeypatch, tmp_path, capsys):
+    module = _load_preflight_module()
+    _patch_tws_down_and_forbid_api(monkeypatch, module)
+    monkeypatch.setattr(module, "claude_cli_available", lambda: False)
+    root = _make_project_root(tmp_path)
+
+    rc = _run_main(monkeypatch, module, "--no-tws", "--project-root", str(root))
+
+    assert rc == 1
+    assert "claude CLI not found on PATH" in capsys.readouterr().err

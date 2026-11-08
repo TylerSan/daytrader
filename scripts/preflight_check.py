@@ -7,7 +7,12 @@ With `--silent`, suppresses stdout (errors still go to stderr).
 Checks:
 - TWS / IB Gateway port reachable (TCP-level)
 - TWS / IB Gateway API responsive (real ib_insync handshake)
-- `claude` CLI present on PATH
+- LLM backend (env DAYTRADER_LLM_BACKEND → config ai.backend → cli):
+  - cli: `claude` CLI present on PATH (fatal if missing)
+  - api: Anthropic API key present (env ANTHROPIC_API_KEY or
+    anthropic.api_key in config/secrets.yaml); a missing `claude` CLI is
+    only a warning. `--api-ping` additionally sends a 1-token request
+    (opt-in: it spends API credits, so routine preflights skip it).
 - `config/default.yaml` and `config/user.yaml` readable
 
 With `--no-tws`, the two TWS checks (port + API handshake) are skipped
@@ -90,6 +95,59 @@ def claude_cli_available() -> bool:
     return shutil.which("claude") is not None
 
 
+def resolve_llm_backend(project_root: Path) -> tuple[str, str | None]:
+    """Return (backend, error). backend is "cli" or "api".
+
+    Falls back to "cli" if the daytrader package is not importable (keeps
+    preflight usable outside the uv env, matching the historical check).
+    """
+    try:
+        from daytrader.core.llm import LLMError, load_llm_settings
+    except ImportError:
+        return "cli", None
+    try:
+        return load_llm_settings(project_root).backend, None
+    except LLMError as e:
+        return "cli", str(e)
+
+
+def api_key_present(project_root: Path) -> tuple[bool, str]:
+    """Return (present, source). Never returns or prints the key."""
+    try:
+        from daytrader.core.llm import resolve_api_key
+    except ImportError:
+        return False, "daytrader package not importable"
+    key, source = resolve_api_key(project_root)
+    return key is not None, source
+
+
+def api_ping(project_root: Path, timeout: float = 30.0) -> tuple[bool, str]:
+    """1-token Messages API request with the resolved key + model.
+
+    Opt-in only (--api-ping): costs a fraction of a cent per run.
+    """
+    try:
+        import anthropic
+
+        from daytrader.core.llm import load_llm_settings, resolve_api_key
+    except ImportError as e:
+        return False, f"import failed: {e}"
+    key, _ = resolve_api_key(project_root)
+    if not key:
+        return False, "no API key"
+    model = load_llm_settings(project_root).model
+    try:
+        client = anthropic.Anthropic(api_key=key, max_retries=0, timeout=timeout)
+        client.messages.create(
+            model=model,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+        return True, f"ok (model={model})"
+    except Exception as e:  # noqa: BLE001
+        return False, f"{type(e).__name__}: {str(e)[:160]}"
+
+
 def config_files_readable(project_root: Path) -> tuple[bool, str]:
     """Return (ok, msg). ok=True if both config files readable."""
     default = project_root / "config" / "default.yaml"
@@ -123,6 +181,12 @@ def main() -> int:
         action="store_true",
         help="skip both TWS checks (TCP port + API handshake). For pipelines "
         "that don't use TWS, e.g. the weekly report (yfinance only).",
+    )
+    parser.add_argument(
+        "--api-ping",
+        action="store_true",
+        help="when the LLM backend is api, also send a 1-token request to "
+        "verify key + model (spends API credits; off by default).",
     )
     parser.add_argument("--project-root", default=str(Path(__file__).resolve().parents[1]))
     args = parser.parse_args()
@@ -160,8 +224,40 @@ def main() -> int:
             else:
                 failures.append(f"TWS API not responsive: {msg}")
 
-    # 3. claude CLI
-    if claude_cli_available():
+    # 3. LLM backend: claude CLI (cli) or Anthropic API key (api)
+    backend, backend_err = resolve_llm_backend(project_root)
+    if backend_err:
+        failures.append(f"config: {backend_err}")
+    elif backend == "api":
+        if not args.silent:
+            print("[preflight] - LLM backend: api")
+        if claude_cli_available():
+            if not args.silent:
+                print("[preflight] ✓ claude CLI on PATH (unused: LLM backend=api)")
+        else:
+            # Warning only. Worded to avoid the wrappers' fatal grep for
+            # "claude CLI not found".
+            print(
+                "[preflight] ! claude CLI not on PATH — ignored (LLM backend=api)",
+                file=sys.stderr,
+            )
+        present, source = api_key_present(project_root)
+        if present:
+            if not args.silent:
+                print(f"[preflight] ✓ Anthropic API key present ({source})")
+            if args.api_ping:
+                ok, msg = api_ping(project_root)
+                if ok:
+                    if not args.silent:
+                        print(f"[preflight] ✓ Anthropic API ping {msg}")
+                else:
+                    failures.append(f"LLM API ping failed: {msg}")
+        else:
+            failures.append(
+                "LLM API key missing: set ANTHROPIC_API_KEY or "
+                "anthropic.api_key in config/secrets.yaml"
+            )
+    elif claude_cli_available():
         if not args.silent:
             print("[preflight] ✓ claude CLI on PATH")
     else:

@@ -54,7 +54,7 @@ prc=$?
 cat "$PREFLIGHT_ERR" >&2
 
 if [[ "$prc" -ne 0 ]]; then
-    if grep -qE 'claude CLI not found|config:' "$PREFLIGHT_ERR"; then
+    if grep -qE 'claude CLI not found|LLM API|config:' "$PREFLIGHT_ERR"; then
         pf_kind="fatal"
     elif grep -q 'TWS' "$PREFLIGHT_ERR"; then
         pf_kind="tws"
