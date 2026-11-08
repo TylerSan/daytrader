@@ -14,6 +14,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_slow)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep a deployer's LLM env vars from leaking into tests.
+
+    Prevents DAYTRADER_LLM_BACKEND=api (or a real ANTHROPIC_API_KEY) in the
+    shell from flipping tests onto the API backend / enabling real calls.
+    """
+    for var in (
+        "DAYTRADER_LLM_BACKEND",
+        "DAYTRADER_LLM_MODEL",
+        "DAYTRADER_LLM_MAX_TOKENS",
+        "ANTHROPIC_API_KEY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+
 @pytest.fixture
 def tmp_dir():
     with tempfile.TemporaryDirectory() as d:

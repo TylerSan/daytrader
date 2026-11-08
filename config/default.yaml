@@ -50,3 +50,17 @@ reports:
     host: 127.0.0.1
     port: 4002
     client_id: 1
+
+# LLM backend for all Claude calls (reports, sentiment, premarket/weekly).
+#   cli = `claude -p` (Claude Code CLI, subscription) — Mac default
+#   api = Anthropic Messages API (needs ANTHROPIC_API_KEY or
+#         anthropic.api_key in config/secrets.yaml) — for Linux/cloud boxes
+# Env overrides: DAYTRADER_LLM_BACKEND, DAYTRADER_LLM_MODEL, DAYTRADER_LLM_MAX_TOKENS
+ai:
+  backend: cli
+  # model: claude-opus-5-5     # api only; unset → claude-opus-5-5
+  max_tokens: 32000
+  effort: high
+  web_search: true
+  web_search_max_uses: 8
+  fallbacks: true

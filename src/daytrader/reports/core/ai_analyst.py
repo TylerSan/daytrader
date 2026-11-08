@@ -12,6 +12,11 @@ Trade-offs vs Anthropic SDK (see plan preamble):
 
 The interface (AIResult shape, .call() signature) is stable so a future API
 backend can be added without touching Orchestrator or PremarketGenerator.
+
+Backend selection (2026-11): `daytrader.core.llm` picks `cli` (this file's
+historical `claude -p` path, unchanged) or `api` (Anthropic SDK) from
+DAYTRADER_LLM_BACKEND → config `ai.backend` → `cli`. Retry count, backoff,
+timeout and the "AI call failed: ..." RuntimeError are identical for both.
 """
 
 from __future__ import annotations
@@ -19,7 +24,17 @@ from __future__ import annotations
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from daytrader.core.llm import (
+    APIBackend,
+    CLIBackend,
+    LLMBackend,
+    LLMError,
+    LLMTimeoutError,
+    get_llm_backend,
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +57,8 @@ class AIAnalyst:
         model: str = "claude-opus-4-7",
         max_retries: int = 3,
         timeout_seconds: int = 300,
+        backend: LLMBackend | None = None,
+        project_root: Path | str | None = None,
     ) -> None:
         # Default 300s (was 180s pre-Phase-4.5).
         # Phase 4.5 added the D. 情绪面 / Sentiment Index block (~1500 chars)
@@ -51,6 +68,7 @@ class AIAnalyst:
         self.model = model
         self.max_retries = max_retries
         self.timeout_seconds = timeout_seconds
+        self.backend = backend if backend is not None else get_llm_backend(project_root)
 
     def call(
         self,
@@ -63,17 +81,18 @@ class AIAnalyst:
         System content is prefixed with "[SYSTEM]" markers; user content with
         "[USER]" markers. claude -p returns plain text on stdout.
         """
+        if isinstance(self.backend, APIBackend):
+            return self._call_api(messages, max_tokens)
+
         prompt = self._flatten_messages(messages)
         cmd = ["claude", "-p"]
 
         last_error: str | None = None
         for attempt in range(self.max_retries + 1):
             try:
-                result = subprocess.run(
+                result = self._cli().run(
                     cmd,
                     input=prompt,
-                    capture_output=True,
-                    text=True,
                     timeout=self.timeout_seconds,
                 )
                 if result.returncode == 0:
@@ -106,6 +125,45 @@ class AIAnalyst:
             raise RuntimeError(f"AI call failed: {last_error}")
 
         # Defensive — should be unreachable
+        raise RuntimeError(f"AI call failed: {last_error}")
+
+    def _cli(self) -> CLIBackend:
+        return self.backend if isinstance(self.backend, CLIBackend) else CLIBackend()
+
+    def _call_api(
+        self,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+    ) -> AIResult:
+        """API backend: same retry/backoff/timeout/error contract as the CLI."""
+        assert isinstance(self.backend, APIBackend)
+        last_error: str | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self.backend.complete(
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    timeout=self.timeout_seconds,
+                )
+                return AIResult(
+                    text=resp.text,
+                    input_tokens=resp.input_tokens,
+                    output_tokens=resp.output_tokens,
+                    cache_creation_tokens=resp.cache_creation_tokens,
+                    cache_read_tokens=resp.cache_read_tokens,
+                    model=resp.model,
+                    stop_reason=resp.stop_reason,
+                )
+            except LLMTimeoutError:
+                last_error = f"api timeout after {self.timeout_seconds}s"
+            except LLMError as e:
+                last_error = str(e)
+
+            if attempt < self.max_retries:
+                time.sleep(2 ** attempt)
+                continue
+            raise RuntimeError(f"AI call failed: {last_error}")
+
         raise RuntimeError(f"AI call failed: {last_error}")
 
     @staticmethod

@@ -126,15 +126,32 @@ def run_cmd(
         )
         ctx.exit(2)
 
-    if shutil.which("claude") is None:
+    from daytrader.core.llm import LLMError, get_llm_backend, resolve_api_key
+
+    project_root = Path(ctx.obj["project_root"]) if ctx.obj else Path.cwd()
+
+    # LLM backend: env DAYTRADER_LLM_BACKEND → config ai.backend → cli.
+    try:
+        llm_backend = get_llm_backend(project_root)
+    except LLMError as e:
+        click.echo(f"LLM backend misconfigured: {e}", err=True)
+        ctx.exit(3)
+    if llm_backend.name == "api":
+        if resolve_api_key(project_root)[0] is None:
+            click.echo(
+                "LLM backend=api but no Anthropic API key: set ANTHROPIC_API_KEY "
+                "or anthropic.api_key in config/secrets.yaml.",
+                err=True,
+            )
+            ctx.exit(3)
+    elif shutil.which("claude") is None:
         click.echo(
             "claude CLI not found on PATH. Phase 2 uses `claude -p` "
-            "(Pro Max subscription) — install Claude Code first.",
+            "(Pro Max subscription) — install Claude Code first, or set "
+            "DAYTRADER_LLM_BACKEND=api to use the Anthropic API.",
             err=True,
         )
         ctx.exit(3)
-
-    project_root = Path(ctx.obj["project_root"]) if ctx.obj else Path.cwd()
     cfg = load_config(
         default_config=project_root / "config" / "default.yaml",
         user_config=project_root / "config" / "user.yaml",
@@ -160,7 +177,7 @@ def run_cmd(
         probe=lambda: tcp_probe(cfg.reports.ib.host, cfg.reports.ib.port),
     )
     try:
-        ai = AIAnalyst()  # claude -p backend; no API key needed
+        ai = AIAnalyst(backend=llm_backend)  # cli (claude -p) or api (Anthropic SDK)
 
         vault_root = Path(cfg.obsidian.vault_path).expanduser()
         fallback_dir = project_root / "data" / "exports"

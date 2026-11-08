@@ -1,4 +1,5 @@
-"""SentimentCollector — invokes `claude -p` with sentiment prompt, parses response."""
+"""SentimentCollector — invokes Claude (`claude -p` or the Anthropic API, per
+`daytrader.core.llm`) with the sentiment prompt, parses the response."""
 
 from __future__ import annotations
 
@@ -6,6 +7,15 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from daytrader.core.llm import (
+    APIBackend,
+    CLIBackend,
+    LLMBackend,
+    LLMError,
+    LLMTimeoutError,
+    get_llm_backend,
+)
 
 from daytrader.reports.sentiment.dataclasses import SentimentResult
 from daytrader.reports.sentiment.parser import ParseError, parse_sentiment_response
@@ -32,6 +42,7 @@ class SentimentCollector:
         time_window: str = "past 24h",
         timeout_s: int = DEFAULT_TIMEOUT_S,
         failure_log_dir: Path | None = None,
+        backend: LLMBackend | None = None,
     ) -> None:
         self._symbols = list(symbols)
         self._time_window = time_window
@@ -39,15 +50,34 @@ class SentimentCollector:
         self._failure_log_dir = failure_log_dir or (
             Path("data") / "logs" / "sentiment-failures"
         )
+        self._backend = backend
 
     def collect(self) -> SentimentResult:
         prompt = build_sentiment_prompt(self._symbols, time_window=self._time_window)
         try:
-            result = subprocess.run(
+            backend = self._backend or get_llm_backend()
+        except LLMError as e:
+            return SentimentResult.unavailable_due_to(f"LLM backend config error: {e}")
+        if isinstance(backend, APIBackend):
+            try:
+                raw = backend.complete(prompt=prompt, timeout=self._timeout_s).text
+            except LLMTimeoutError:
+                return SentimentResult.unavailable_due_to(
+                    f"api timeout after {self._timeout_s}s"
+                )
+            except LLMError as e:
+                return SentimentResult.unavailable_due_to(str(e)[:200])
+            except Exception as e:  # noqa: BLE001 — collector never raises
+                return SentimentResult.unavailable_due_to(
+                    f"api error: {type(e).__name__}: {str(e)[:160]}"
+                )
+            return self._parse(raw)
+
+        cli = backend if isinstance(backend, CLIBackend) else CLIBackend()
+        try:
+            result = cli.run(
                 ["claude", "-p"],
                 input=prompt,
-                capture_output=True,
-                text=True,
                 timeout=self._timeout_s,
             )
         except subprocess.TimeoutExpired:
@@ -64,7 +94,9 @@ class SentimentCollector:
                 f"claude -p exit={result.returncode}: {result.stderr.strip()[:200]}"
             )
 
-        raw = result.stdout
+        return self._parse(result.stdout)
+
+    def _parse(self, raw: str) -> SentimentResult:
         try:
             return parse_sentiment_response(raw, expected_symbols=self._symbols)
         except ParseError as e:

@@ -5,12 +5,43 @@ from __future__ import annotations
 import logging
 import subprocess
 
+from daytrader.core.llm import APIBackend, CLIBackend, LLMError, get_llm_backend
 from daytrader.premarket.collectors.base import CollectorResult
 
 _log = logging.getLogger(__name__)
 
 CLAUDE_BIN = "/opt/homebrew/bin/claude"
 AI_TIMEOUT = 600  # seconds (AI analysis can take a few minutes)
+
+
+def _run_llm(prompt: str, timeout: int) -> tuple[int, str, str]:
+    """Run one prompt on the configured backend → (returncode, stdout, stderr).
+
+    CLI backend: the historical `claude -p <prompt> --output-format text`
+    call, unchanged (TimeoutExpired / FileNotFoundError propagate to the
+    caller's existing handlers). API backend: returncode 0 on success, 1 with
+    the error text in stderr on failure; timeouts raise
+    subprocess.TimeoutExpired so callers' timeout branches still apply.
+    """
+    try:
+        backend = get_llm_backend()
+    except LLMError as e:
+        return 1, "", f"LLM backend config error: {e}"
+    if isinstance(backend, APIBackend):
+        from daytrader.core.llm import LLMTimeoutError
+
+        try:
+            resp = backend.complete(prompt=prompt, timeout=timeout)
+            return 0, resp.text, ""
+        except LLMTimeoutError as e:
+            raise subprocess.TimeoutExpired(cmd="anthropic-api", timeout=timeout) from e
+        except LLMError as e:
+            return 1, "", str(e)
+    cli = backend if isinstance(backend, CLIBackend) else CLIBackend()
+    result = cli.run(
+        [CLAUDE_BIN, "-p", prompt, "--output-format", "text"], timeout=timeout
+    )
+    return result.returncode, result.stdout, result.stderr
 
 
 def translate_headlines(
@@ -32,19 +63,14 @@ def translate_headlines(
         f"{numbered}"
     )
     try:
-        result = subprocess.run(
-            [CLAUDE_BIN, "-p", prompt, "--output-format", "text"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        if result.returncode != 0:
-            _log.warning("Translation failed (rc=%d)", result.returncode)
+        returncode, stdout, _stderr = _run_llm(prompt, timeout)
+        if returncode != 0:
+            _log.warning("Translation failed (rc=%d)", returncode)
             return {}
 
         # Parse "1. 中文" lines back into dict
         translations: dict[str, str] = {}
-        for line in result.stdout.strip().splitlines():
+        for line in stdout.strip().splitlines():
             line = line.strip()
             if not line or "." not in line:
                 continue
@@ -71,18 +97,13 @@ def invoke_claude_analysis(prompt: str, timeout: int = AI_TIMEOUT) -> str:
     Never raises — AI analysis is best-effort and must not break report rendering.
     """
     try:
-        result = subprocess.run(
-            [CLAUDE_BIN, "-p", prompt, "--output-format", "text"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
+        returncode, stdout, stderr = _run_llm(prompt, timeout)
+        if returncode == 0:
+            return stdout.strip()
         _log.warning(
             "Claude AI analysis failed (rc=%d): %s",
-            result.returncode,
-            result.stderr[:300],
+            returncode,
+            stderr[:300],
         )
         return ""
     except subprocess.TimeoutExpired:

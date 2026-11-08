@@ -89,6 +89,21 @@ class ReportsConfig(BaseModel):
     ib: ReportsIBConfig = ReportsIBConfig()
 
 
+class AIConfig(BaseModel):
+    """LLM backend selection — see daytrader.core.llm for resolution order.
+
+    Env vars DAYTRADER_LLM_BACKEND / DAYTRADER_LLM_MODEL /
+    DAYTRADER_LLM_MAX_TOKENS override these keys.
+    """
+    backend: str = "cli"            # "cli" (claude -p) | "api" (Anthropic SDK)
+    model: str | None = None        # api only; None → daytrader.core.llm.DEFAULT_API_MODEL
+    max_tokens: int = 32000         # api only; floor (thinking shares this budget)
+    effort: str | None = "high"     # api only; output_config.effort
+    web_search: bool = True         # api only; server-side web search (CLI has WebSearch)
+    web_search_max_uses: int = 8    # api only; per call
+    fallbacks: bool = True          # api only; server-side refusal fallback (beta)
+
+
 class DayTraderConfig(BaseModel):
     database: DatabaseConfig = DatabaseConfig()
     notifications: NotificationsConfig = NotificationsConfig()
@@ -97,6 +112,7 @@ class DayTraderConfig(BaseModel):
     backtest: BacktestConfig = BacktestConfig()
     journal: JournalConfig = JournalConfig()
     reports: ReportsConfig = ReportsConfig()
+    ai: AIConfig = AIConfig()
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
